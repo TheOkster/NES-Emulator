@@ -36,7 +36,7 @@ module ppu (
             // and if necessary, only do it during these times
             if(8'h2000 <= addr && addr <= 8'h3FFF) begin
                 if(cpu_rw == CPU_WRITE) begin
-                    // 16'h4014: oam_dma <= cpu_dout; // but what about this? -> needs to be in separate if statements
+                    // 16'h4014: oam_dma <= cpu_dout; -> needs to be in separate if statements
                     case (cpu_addr[2:0]) // Changed to be 3 bits but keeping 16 bit input for mirroring
                         3'h0: ppu_ctrl <= cpu_dout;
                         3'h1: ppu_mask <= cpu_dout;
