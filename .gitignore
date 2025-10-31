@@ -11,3 +11,4 @@
 !hdl/*.sv
 !hdl/*.v
 !sim/*.py
+!util/*.py
