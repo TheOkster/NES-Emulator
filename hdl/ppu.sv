@@ -32,6 +32,8 @@ module ppu (
             oam_dma <= 0;
         end else begin
             // I think? this is right - ignoring timing ofc
+            // TODO: I think this may only be permitted during blank periods, need to double check
+            // and if necessary, only do it during these times
             if(cpu_rw == CPU_WRITE) begin
                 case (cpu_addr) // May need to cahnge to be 3 bits and change the 16' to 3' accordingly
                     16'h2000: ppu_ctrl <= cpu_dout;
