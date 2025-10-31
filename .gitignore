@@ -1,0 +1,13 @@
+# This is temporary
+# Should probably use a more robust one but this should okay for now...
+# Note it is almost certainly too strict
+# Didn't include .mems for now 
+
+*
+!.gitignore
+!data/
+!build.tcl
+!xdc/*.xdc
+!hdl/*.sv
+!hdl/*.v
+!sim/*.py
