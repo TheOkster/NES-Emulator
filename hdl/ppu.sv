@@ -22,7 +22,7 @@ module ppu (
     logic[4:0] cycle;
     logic ppu_clk_trig;
     logic first_time;
-    logic [23:0] palette_ram [0:63]; // since this is small, i'm just using registers
+    logic [23:0] sys_palette [0:63]; // since this is small, i'm just using registers
     logic[8:0] dot;
     logic[8:0] scanline_p1; // This is the scanline plus 1 to avoid signed numbers issues, will change name / function
     localparam PPU_CYCLES_PER_CLOCK_CYCLE = 19; // This is not correct but closest integer multiplier
@@ -33,7 +33,7 @@ module ppu (
 
 
     initial begin
-        $readmemh("../data/2C07.mem", palette_ram);
+        $readmemh("../data/2C07.mem", sys_palette);
         $dumpfile("ppu.fst");
         for (int i = 0; i < 64; i = i + 1)
             $dumpvars(0, palette_ram[i]);

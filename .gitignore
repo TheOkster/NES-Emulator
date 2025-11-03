@@ -5,10 +5,17 @@
 
 *
 !.gitignore
+
 !data/
+!data/*.mem
 !build.tcl
+!xdc/
 !xdc/*.xdc
+!hdl/
 !hdl/*.sv
 !hdl/*.v
+!sim/
 !sim/*.py
+!util/
+!util/*.pal
 !util/*.py
