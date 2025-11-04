@@ -1,10 +1,21 @@
 # This is temporary
-# Should probably use a more robust one but this should okay for now...
+# Should probably use a more robust one but this should be okay for now...
 # Note it is almost certainly too strict
 # Didn't include .mems for now 
 
-util/*.mem
-util/ROMS/*
-obj/
-data/
-.gitignore
+*
+!.gitignore
+
+!data/
+!data/*.mem
+!build.tcl
+!xdc/
+!xdc/*.xdc
+!hdl/
+!hdl/*.sv
+!hdl/*.v
+!sim/
+!sim/*.py
+!util/
+!util/*.pal
+!util/*.py
