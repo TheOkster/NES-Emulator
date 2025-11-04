@@ -40,7 +40,8 @@ def ppu_runner():
     sim = os.getenv("SIM", "icarus")
     proj_path = Path(__file__).resolve().parent.parent
     sys.path.append(str(proj_path / "sim" / "model"))
-    sources = [proj_path / "hdl" / "ppu.sv"]
+    sources = [proj_path / "hdl" / "ppu.sv", proj_path / "hdl" / "ppu_reg_writer.sv",
+               proj_path / "hdl" / "xilinx_true_dual_port_read_first_2_clock_ram.v"]
     build_test_args = ["-Wall"]
     #values for parameters defined earlier in the code.
 
