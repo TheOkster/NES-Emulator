@@ -43,7 +43,7 @@ module ppu (
     logic ppu_clk_trig;
     logic first_time;
     logic[8:0] dot;
-    logic[8:0] scanline_p1; // This is the scanline plus 1 to avoid signed numbers issues, will change name / function
+    logic[8:0] scanline; // This is the scanline plus 1 to avoid signed numbers issues, will change name / function
     localparam PPU_CYCLES_PER_CLOCK_CYCLE = 19; // This is not correct but closest integer multiplier
     // in the future, may want to use some input signal that runs at exactly PPU clock 
     
@@ -88,8 +88,6 @@ module ppu (
     xilinx_true_dual_port_read_first_2_clock_ram #(
         .RAM_WIDTH(8), //each entry in this memory is 16 bits
         .RAM_DEPTH(1024)) //there are 320*180 or 57600 entries for full frame
-        .RAM_WIDTH(8), 
-        .RAM_DEPTH(1024))
     name_table (
         .addra(name_table_wr_addr), //pixels are stored using this math
         .clka(clk),
@@ -239,7 +237,7 @@ module ppu (
             cycle <= 0;
             first_time <= 1;
             dot <= 0;
-            scanline_p1 <= 1;
+            scanline <= 0;
         end else begin
             first_time <= 0;
             cycle <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : (cycle + 1);
@@ -249,9 +247,10 @@ module ppu (
             if(ppu_clk_trig & !first_time) begin
                 if(dot >= 341) begin
                     dot <= 0;
-                    scanline_p1 <= (scanline_p1 == 261) ? 0 : scanline_p1 + 1;
+                    scanline <= (scanline == 261) ? 0 : scanline + 1;
                     // need trigger to show that frame is complete
-                 else begin
+                end
+                else begin
                     dot <= dot + 1;
                 end
 
