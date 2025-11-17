@@ -1,0 +1,12 @@
+tile = bytes([
+    0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+]) # Will duplicate 512 times
+
+pattern_table = tile * 512
+
+
+path = "data/pattern_table_diagonal.mem"
+with open(path, "w") as f:
+   for byte in pattern_table:
+        f.write(f"{byte:02x}\n")

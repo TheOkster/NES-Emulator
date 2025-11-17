@@ -16,6 +16,8 @@
 !hdl/*.v
 !sim/
 !sim/*.py
+!sim/util/
+!sim/util/*.py
 !util/
 !util/*.pal
 !util/*.py
