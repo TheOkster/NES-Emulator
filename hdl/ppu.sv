@@ -9,11 +9,11 @@
 module ppu (
         input wire clk,
         input wire rst,
-        input logic [7:0] cpu_dout,
-        input logic [15:0] cpu_addr, // from what i'm seeing, in the hardware it's only 3 bits?
+        input wire [7:0] cpu_dout,
+        input wire [15:0] cpu_addr, // from what i'm seeing, in the hardware it's only 3 bits?
         output logic [7:0] cpu_din,
         output logic [23:0] pixel, // 8 : 8 : 8 for now, might change to be 5 : 6 : 5?
-        input logic cpu_rw,
+        input wire cpu_rw,
         output logic patt_table_ind, // 0 or 1
         output logic [7:0] patt_table_x,
         output logic [7:0] patt_table_y,
@@ -245,10 +245,9 @@ module ppu (
             // TODO Add Test Cases for timing
             // verify there are no off by one errors
             if(ppu_clk_trig & !first_time) begin
-                if(dot >= 341) begin
+                if(dot >= 340) begin
                     dot <= 0;
                     scanline <= (scanline == 261) ? 0 : scanline + 1;
-                    // need trigger to show that frame is complete
                 end
                 else begin
                     dot <= dot + 1;

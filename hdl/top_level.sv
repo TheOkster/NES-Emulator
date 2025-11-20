@@ -12,10 +12,219 @@ module top_level(
         output logic [3:0] ss1_an,
         output logic [6:0] ss0_c,
         output logic [6:0] ss1_c,
-        output logic [2:0] pmoda
+        output logic [2:0] pmoda,
+                // hdmi port
+        output logic [2:0]  hdmi_tx_p, //hdmi output signals (positives) (blue, green, red)
+        output logic [2:0]  hdmi_tx_n, //hdmi output signals (negatives) (blue, green, red)
+        output logic        hdmi_clk_p, hdmi_clk_n //differential hdmi clock
     );
- 
+    logic [23:0] pixel_out;
+    // Pattern Table Variables for debugging purpose
+    logic patt_table_ind;
+    logic [7:0] patt_table_x;
+    logic [7:0] patt_table_y;
+    logic [7:0] patt_table_pix;
+    logic patt_table_out_valid;
+    // logic [23:0] frame_buff_raw;
+    // logic clk_100_passthrough;
+    logic clk_pixel;
+    logic          clk_5x;
+
+    cw_hdmi_clk_wiz wizard_hdmi(
+        .sysclk(clk_100mhz),
+        .clk_pixel(clk_pixel),
+        .clk_tmds(clk_5x),
+        .reset(0)
+    );
+
+    ppu my_ppu(
+        .clk(clk_100mhz),
+        .rst(),
+        .cpu_dout(),
+        .cpu_addr(),
+        .cpu_din(),
+        .pixel(pixel_out),
+        .cpu_rw(),
+        .patt_table_ind(),
+        .patt_table_x(patt_table_x),
+        .patt_table_y(patt_table_y),
+        .patt_table_pix(patt_table_pix),
+        .patt_table_out_valid(patt_table_out_valid)
+    );
+    logic [8:0] write_addr;
+    assign write_addr = 256*patt_table_y+patt_table_x;
+
+
+    logic           h_sync_hdmi;
+    logic           v_sync_hdmi;
+    logic [10:0]    h_count_hdmi;
+    logic [9:0]     v_count_hdmi;
+    logic           active_draw_hdmi;
+    logic           new_frame_hdmi;
+    logic [5:0]     frame_count_hdmi;
+    logic sys_rst_pixel;
     
+    assign sys_rst_pixel = 0; // for now
+    // rgb output values
+    // logic [7:0]     red,green,blue;
+    video_sig_gen vsg(
+        .pixel_clk(clk_pixel),
+        .rst(sys_rst_pixel),
+        .h_count(h_count_hdmi),
+        .v_count(v_count_hdmi),
+        .v_sync(v_sync_hdmi),
+        .h_sync(h_sync_hdmi),
+        .new_frame(new_frame_hdmi),
+        .active_draw(active_draw_hdmi),
+        .frame_count(frame_count_hdmi)
+    );
+    localparam FB_SIZE = 256 * 240;
+    xilinx_true_dual_port_read_first_2_clock_ram #(
+        .RAM_WIDTH(24), //each entry in this memory is 24 bits
+        .RAM_DEPTH(FB_SIZE))
+    frame_buffer (
+        .addra(write_addr), //pixels are stored using this math
+        .clka(clk_100mhz), // set to ppu clk?
+        .wea(patt_table_out_valid),
+        .dina(patt_table_pix),
+        .ena(1'b1),
+        .regcea(1'b1),
+        .rsta(), // update
+        .douta(), //never read from this side
+        .addrb(addrb),//transformed lookup pixel
+        .dinb(16'b0),
+        .clkb(clk_pixel),
+        .web(1'b0),
+        .enb(1'b1),
+        .rstb(), // update
+        .regceb(1'b1)
+        // .doutb(frame_buff_raw)
+    );
+    // 
+    logic [23:0] frame_buff_raw; //data out of frame buffer (565)
+    assign frame_buff_raw = 24'hFF33FF;
+    logic [FB_SIZE-1:0] addrb; //used to lookup address in memory for reading from buffer
+    logic good_addrb; //used to indicate within valid frame for scaling
+    logic good_addrb_bufs [1:0]; //used to indicate within valid frame for scaling
  
+    // if(btn[1])
+    always_ff @(posedge clk_pixel)begin
+        //default: delete:
+        // addrb <= h_count_hdmi + 320*v_count_hdmi;
+        // good_addrb <= (h_count_hdmi<320)&&(v_count_hdmi<180);
+        //use structure below to do scaling
+        addrb <= (h_count_hdmi / 3) + 256*(v_count_hdmi / 3); // yes, i'm aware division
+        good_addrb <= (h_count_hdmi<256*3)&&(v_count_hdmi<240*3);
+        good_addrb_bufs[0] <= good_addrb;
+        good_addrb_bufs[1] <= good_addrb_bufs[0];
+    end
+
+    logic [7:0] fb_red, fb_green, fb_blue;
+    logic [10:0]    h_count_hdmi_buffs[2:0];
+    logic [9:0]     v_count_hdmi_buffs[2:0];
+
+
+    logic           h_sync_hdmi_buffs [11:0];
+    logic           v_sync_hdmi_buffs [11:0];  
+    logic active_draw_buffs [2:0];
+    logic new_frame_hdmi_buffs [2:0];
+
+    always_ff @(posedge clk_pixel)begin
+
+        h_count_hdmi_buffs[0] <= h_count_hdmi;
+        v_count_hdmi_buffs[0] <= v_count_hdmi;
+
+        h_sync_hdmi_buffs[0] <= h_sync_hdmi;
+        v_sync_hdmi_buffs[0] <= v_sync_hdmi;
+        active_draw_buffs[0] <= active_draw_hdmi;
+        
+        new_frame_hdmi_buffs[0] <=  new_frame_hdmi;
+
+        for (int i=1; i<3; i = i+1) begin
+            h_count_hdmi_buffs[i] <= h_count_hdmi_buffs[i-1];
+            v_count_hdmi_buffs[i] <= v_count_hdmi_buffs[i-1];
+        end
+        for (int i=1; i<3; i = i+1) begin
+            h_sync_hdmi_buffs[i] <= h_sync_hdmi_buffs[i-1];
+            v_sync_hdmi_buffs[i] <= v_sync_hdmi_buffs[i-1];
+            active_draw_buffs[i] <= active_draw_buffs[i-1];
+        end 
+        for (int i=1; i<3; i = i+1) begin
+            new_frame_hdmi_buffs[i] <= new_frame_hdmi_buffs[i-1];
+        end 
+    end
+
+    always_ff @(posedge clk_pixel)begin
+        fb_red <= (good_addrb_bufs[1])?{frame_buff_raw[23:16]}:8'b0;
+        fb_green <= (good_addrb_bufs[1])?{frame_buff_raw[15:8]}:8'b0;
+        fb_blue <= (good_addrb_bufs[1])?{frame_buff_raw[7:0]}:8'b0;
+    end
+
+    // HDMI Output
+
+    logic [9:0] tmds_10b [0:2]; //output of each TMDS encoder!
+    logic       tmds_signal [2:0]; //output of each TMDS serializer!
+
+    tmds_encoder tmds_red(
+        .clk(clk_pixel),
+        .rst(sys_rst_pixel),
+        .video_data(fb_red),
+        .control(2'b0),
+        .video_enable(active_draw_buffs[2]),
+        .tmds(tmds_10b[2])
+    );
+    tmds_encoder tmds_green(
+        .clk(clk_pixel),
+        .rst(sys_rst_pixel),
+        .video_data(fb_green),
+        .control(2'b0),
+        .video_enable(active_draw_buffs[2]),
+        .tmds(tmds_10b[1])
+    );
+    tmds_encoder tmds_blue(
+        .clk(clk_pixel),
+        .rst(sys_rst_pixel),
+        .video_data(fb_blue),
+        .control({v_sync_hdmi_buffs[2],h_sync_hdmi_buffs[2]}),
+        .video_enable(active_draw_buffs[2]),
+        .tmds(tmds_10b[0])
+    );
+
+
+    //three tmds_serializers (blue, green, red):
+    //MISSING: two more serializers for the green and blue tmds signals.
+    tmds_serializer red_ser(
+        .clk_pixel(clk_pixel),
+        .clk_5x(clk_5x),
+        .rst(sys_rst_pixel),
+        .tmds_in(tmds_10b[2]),
+        .tmds_out(tmds_signal[2])
+    );
+    tmds_serializer green_ser(
+        .clk_pixel(clk_pixel),
+        .clk_5x(clk_5x),
+        .rst(sys_rst_pixel),
+        .tmds_in(tmds_10b[1]),
+        .tmds_out(tmds_signal[1])
+    );
+    tmds_serializer blue_ser(
+        .clk_pixel(clk_pixel),
+        .clk_5x(clk_5x),
+        .rst(sys_rst_pixel),
+        .tmds_in(tmds_10b[0]),
+        .tmds_out(tmds_signal[0])
+    );
+
+    //output buffers generating differential signals:
+    //three for the r,g,b signals and one that is at the pixel clock rate
+    //the HDMI receivers use recover logic coupled with the control signals asserted
+    //during blanking and sync periods to synchronize their faster bit clocks off
+    //of the slower pixel clock (so they can recover a clock of about 742.5 MHz from
+    //the slower 74.25 MHz clock)
+    OBUFDS OBUFDS_blue (.I(tmds_signal[0]), .O(hdmi_tx_p[0]), .OB(hdmi_tx_n[0]));
+    OBUFDS OBUFDS_green(.I(tmds_signal[1]), .O(hdmi_tx_p[1]), .OB(hdmi_tx_n[1]));
+    OBUFDS OBUFDS_red  (.I(tmds_signal[2]), .O(hdmi_tx_p[2]), .OB(hdmi_tx_n[2]));
+    OBUFDS OBUFDS_clock(.I(clk_pixel), .O(hdmi_clk_p), .OB(hdmi_clk_n));
+
 endmodule // top_level
 `default_nettype wire
