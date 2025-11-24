@@ -26,8 +26,6 @@ module ppu (
     logic [7:0] ppu_mask;
     logic [7:0] ppu_status; // [4:0] unimportant, sprite overflow, sprite zero hit, vblank
     localparam CPU_WRITE = 0; // opposite of what you might think
-    logic [23:0] sys_palette [0:63]; // since this is small, i'm just using registers
-    logic [7:0] palette_ram [0:31]; // same thing also small
     logic vblank_flag;
     logic sprite_overflow_flag;
     logic sprite_0_hit_flag;
@@ -170,6 +168,8 @@ module ppu (
 
     assign patt_table_re_addr = 16'h1000*patt_table_ind + 256 * tile_row + 16 * tile_col + rel_row + 8*get_tile_msb;// CHROM ONLY
     assign patt_table_out_valid = ~loading_stage;
+    assign patt_table_x = tile_row*16 + rel_row;
+    assign patt_table_y = tile_col*16 + rel_col;
     assign patt_table_pix = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
     always_ff @(posedge clk) begin
         
