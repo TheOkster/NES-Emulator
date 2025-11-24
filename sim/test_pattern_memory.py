@@ -35,7 +35,7 @@ async def test_ppu(dut):
                      if rel_col:
                         await FallingEdge(dut.ppu_clk_trig)
                      await ClockCycles(dut.clk, 1)
-                     assert dut.patt_table_pix.value == (rel_row == rel_col), f"Invalid value at {rel_row}, {rel_col} in tile {tile_row}, {tile_col}"
+                     assert dut.patt_table_pix.value == (0x1251a8 if rel_row == rel_col else 0), f"Invalid value at {rel_row}, {rel_col} in tile {tile_row}, {tile_col}"
                      assert dut.patt_table_ind.value == patt_table, f"Pattern table value is not {patt_table}"
                      assert dut.tile_row.value == tile_row
                      assert dut.tile_col.value == tile_col
@@ -59,6 +59,8 @@ def ppu_runner():
     sys.path.append(str(proj_path / "sim" / "model"))
     sources = [proj_path / "hdl" / "xilinx_true_dual_port_read_first_2_clock_ram.v",
                proj_path / "hdl" / "ppu.sv",
+                              proj_path / "hdl" / "palette_ram.sv",
+
                ]
     build_test_args = ["-Wall"]
     #values for parameters defined earlier in the code.

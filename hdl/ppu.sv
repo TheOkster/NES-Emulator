@@ -17,7 +17,7 @@ module ppu (
         output logic patt_table_ind, // 0 or 1
         output logic [7:0] patt_table_x,
         output logic [7:0] patt_table_y,
-        output logic [7:0] patt_table_pix,
+        output logic [23:0] patt_table_pix,
         output logic patt_table_out_valid
 
     );
@@ -46,10 +46,10 @@ module ppu (
     // in the future, may want to use some input signal that runs at exactly PPU clock 
     
     initial begin
-         $readmemh(`FPATH(2C07.mem), sys_palette); // May need to change
-         $dumpfile("ppu.fst");
-         for (int i = 0; i < 64; i = i + 1)
-             $dumpvars(0, sys_palette[i]);
+        //  $readmemh(`FPATH(2C07.mem), sys_palette); // May need to change
+        //  $dumpfile("ppu.fst");
+        //  for (int i = 0; i < 64; i = i + 1)
+        //      $dumpvars(0, sys_palette[i]);
     end
     typedef enum logic [1:0] {
         FORCE_VSYNC_OFF = 2'd00,
@@ -61,7 +61,13 @@ module ppu (
 
     // Want to create a module but am delaying bc idk where i'll put palette read for now
     // and bc of the issue of passing unpacked modules btw modules
+    logic palette_ram_we;
+    logic palette_ram_data_in;
+    logic palette_ram_inp_addr;
+    logic [23:0] palette_ram_output;
 
+    palette_ram palette_ram_ins (.clk(clk), .we(palette_ram_we), .inp_addr(palette_ram_inp_addr),
+    .din(palette_ram_data_in), .dout(palette_ram_output));
     // logic[15:0] read_addr;
     logic [7:0] ppu_data_buffer;
     logic[4:0] actual_read_addr;
@@ -170,7 +176,8 @@ module ppu (
     assign patt_table_out_valid = ~loading_stage;
     assign patt_table_x = tile_row*16 + rel_row;
     assign patt_table_y = tile_col*16 + rel_col;
-    assign patt_table_pix = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
+    assign palette_ram_inp_addr = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
+    assign patt_table_pix = palette_ram_output;
     always_ff @(posedge clk) begin
         
         if(rst) begin   
@@ -198,9 +205,6 @@ module ppu (
                             end
                         end 
                     end
-                end
-                if(!loading_stage) begin
-                    // patt_table_pix = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]}; // CHANGE
                 end
             end else begin
                 if(loading_stage & !first_time) begin

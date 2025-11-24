@@ -23,7 +23,7 @@ module top_level(
     logic patt_table_ind;
     logic [7:0] patt_table_x;
     logic [7:0] patt_table_y;
-    logic [7:0] patt_table_pix;
+    logic [23:0] patt_table_pix;
     logic patt_table_out_valid;
     // logic [23:0] frame_buff_raw;
     // logic clk_100_passthrough;
@@ -80,7 +80,7 @@ module top_level(
     );
     localparam FB_SIZE = 256 * 240;
     xilinx_true_dual_port_read_first_2_clock_ram #(
-        .RAM_WIDTH(24), //each entry in this memory is 24 bits
+        .RAM_WIDTH(24), //each entry in this memory is 24 bits for now, may be better to just store palette ram index tho and then convert here
         .RAM_DEPTH(FB_SIZE))
     frame_buffer (
         .addra(write_addr), //pixels are stored using this math
@@ -97,12 +97,12 @@ module top_level(
         .web(1'b0),
         .enb(1'b1),
         .rstb(), // update
-        .regceb(1'b1)
-        // .doutb(frame_buff_raw)
+        .regceb(1'b1),
+        .doutb(frame_buff_raw)
     );
     // 
     logic [23:0] frame_buff_raw; //data out of frame buffer (565)
-    assign frame_buff_raw = 24'hFF33FF;
+    // assign frame_buff_raw = 24'hFF33FF;
     logic [FB_SIZE-1:0] addrb; //used to lookup address in memory for reading from buffer
     logic good_addrb; //used to indicate within valid frame for scaling
     logic good_addrb_bufs [1:0]; //used to indicate within valid frame for scaling
