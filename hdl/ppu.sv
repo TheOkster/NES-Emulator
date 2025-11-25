@@ -64,7 +64,7 @@ module ppu (
     // and bc of the issue of passing unpacked modules btw modules
     logic palette_ram_we;
     logic palette_ram_data_in;
-    logic palette_ram_inp_addr;
+    logic [4:0] palette_ram_inp_addr;
     logic [23:0] palette_ram_output;
 
     palette_ram palette_ram_ins (.clk(clk), .we(palette_ram_we), .inp_addr(palette_ram_inp_addr),
@@ -121,7 +121,7 @@ module ppu (
     xilinx_true_dual_port_read_first_2_clock_ram #(
         .RAM_WIDTH(8), //each entry in this memory is a byte
         .RAM_DEPTH(4096*2),
-        .INIT_FILE(`FPATH(pattern_table_diagonal.mem))) //there are two sides of table, both with 4096 entries each
+        .INIT_FILE(`FPATH(chr_rom.mem))) //there are two sides of table, both with 4096 entries each
     patt_table (
         .addra(patt_table_wr_addr), //pixels are stored using this math
         .clka(clk),
@@ -175,8 +175,8 @@ module ppu (
 
     assign patt_table_re_addr = 16'h1000*patt_table_ind + 256 * tile_row + 16 * tile_col + rel_row + 8*get_tile_msb;// CHROM ONLY
     assign patt_table_out_valid = ~loading_stage;
-    assign patt_table_x = patt_table_ind*128 + tile_row*8 + rel_row;
-    assign patt_table_y = tile_col*8 + rel_col;
+    assign patt_table_x =  patt_table_ind*128 + tile_col*8 + rel_col;
+    assign patt_table_y = tile_row*8 + rel_row;
     assign palette_ram_inp_addr = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
     assign patt_table_pix = palette_ram_output;
     always_ff @(posedge clk) begin
