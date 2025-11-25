@@ -1,9 +1,18 @@
+
+`timescale 1ns / 1ps
+`default_nettype none
+`ifdef SYNTHESIS
+`define FPATH(X) `"X`"
+`else /* ! SYNTHESIS */
+`define FPATH(X) `"../data/X`"
+`endif  /* ! SYNTHESIS */
+
 module palette_ram
 (
-    input  logic        clk,
-    input  logic        we,
-    input  logic [4:0]  inp_addr,
-    input  logic [7:0]  din,
+    input  wire        clk,
+    input  wire        we,
+    input  wire [4:0]  inp_addr,
+    input  wire [7:0]  din,
     output logic [23:0]  dout
 );
     logic [23:0] sys_palette [0:63]; // since this is small, i'm just using registers

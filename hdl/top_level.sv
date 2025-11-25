@@ -26,19 +26,21 @@ module top_level(
     logic [23:0] patt_table_pix;
     logic patt_table_out_valid;
     // logic [23:0] frame_buff_raw;
-    // logic clk_100_passthrough;
+    logic clk_100_passthrough;
     logic clk_pixel;
     logic          clk_5x;
 
     cw_hdmi_clk_wiz wizard_hdmi(
-        .sysclk(clk_100mhz),
+        .sysclk(clk_100_passthrough),
         .clk_pixel(clk_pixel),
         .clk_tmds(clk_5x),
         .reset(0)
     );
-
+    logic clk_100mhz_ibuff;
+    IBUF clk_ibuf (.I(clk_100mhz), .O(clk_100mhz_ibuff));
+    BUFG clk_bufg (.I(clk_100mhz_ibuff), .O(clk_100_passthrough));
     ppu my_ppu(
-        .clk(clk_100mhz),
+        .clk(clk_100_passthrough),
         .rst(),
         .cpu_dout(),
         .cpu_addr(),
@@ -50,7 +52,7 @@ module top_level(
         .patt_table_pix(patt_table_pix),
         .patt_table_out_valid(patt_table_out_valid)
     );
-    logic [8:0] write_addr;
+    logic [16:0] write_addr;
     assign write_addr = 256*patt_table_y+patt_table_x;
 
 
@@ -77,15 +79,16 @@ module top_level(
         .active_draw(active_draw_hdmi),
         .frame_count(frame_count_hdmi)
     );
-    localparam FB_SIZE = 256 * 240;
-    logic frame_buff_we = btn[1] ? patt_table_out_valid : 1;
-    logic [23:0] frame_buff_in = btn[1] ? patt_table_pix : pixel_out;
+    localparam FB_DEPTH = 256 * 240;
+    localparam FB_SIZE = $clog2(FB_DEPTH);
+    logic frame_buff_we = patt_table_out_valid;
+    logic [23:0] frame_buff_in =  patt_table_pix;
     xilinx_true_dual_port_read_first_2_clock_ram #(
         .RAM_WIDTH(24), //each entry in this memory is 24 bits for now, may be better to just store palette ram index tho and then convert here
-        .RAM_DEPTH(FB_SIZE))
+        .RAM_DEPTH(FB_DEPTH))
     frame_buffer (
         .addra(write_addr), //pixels are stored using this math
-        .clka(clk_100mhz), // set to ppu clk?
+        .clka(clk_100_passthrough), // set to ppu clk?
         .wea(frame_buff_we),
         .dina(frame_buff_in),
         .ena(1'b1),
