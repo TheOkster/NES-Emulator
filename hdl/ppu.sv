@@ -14,13 +14,14 @@ module ppu (
         output logic [7:0] cpu_din,
         output logic [23:0] pixel, // 8 : 8 : 8 for now, might change to be 5 : 6 : 5?
         input wire cpu_rw,
-        output logic patt_table_ind, // 0 or 1
+        // output logic patt_table_ind, // 0 or 1
         output logic [7:0] patt_table_x,
         output logic [7:0] patt_table_y,
         output logic [23:0] patt_table_pix,
         output logic patt_table_out_valid
 
     );
+    logic patt_table_ind;
     logic [7:0] oam_data;
     logic [7:0] ppu_ctrl;
     logic [7:0] ppu_mask;
@@ -174,8 +175,8 @@ module ppu (
 
     assign patt_table_re_addr = 16'h1000*patt_table_ind + 256 * tile_row + 16 * tile_col + rel_row + 8*get_tile_msb;// CHROM ONLY
     assign patt_table_out_valid = ~loading_stage;
-    assign patt_table_x = tile_row*16 + rel_row;
-    assign patt_table_y = tile_col*16 + rel_col;
+    assign patt_table_x = patt_table_ind*128 + tile_row*8 + rel_row;
+    assign patt_table_y = tile_col*8 + rel_col;
     assign palette_ram_inp_addr = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
     assign patt_table_pix = palette_ram_output;
     always_ff @(posedge clk) begin

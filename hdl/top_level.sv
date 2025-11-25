@@ -20,7 +20,7 @@ module top_level(
     );
     logic [23:0] pixel_out;
     // Pattern Table Variables for debugging purpose
-    logic patt_table_ind;
+    // logic patt_table_ind;
     logic [7:0] patt_table_x;
     logic [7:0] patt_table_y;
     logic [23:0] patt_table_pix;
@@ -45,7 +45,6 @@ module top_level(
         .cpu_din(),
         .pixel(pixel_out),
         .cpu_rw(),
-        .patt_table_ind(),
         .patt_table_x(patt_table_x),
         .patt_table_y(patt_table_y),
         .patt_table_pix(patt_table_pix),
@@ -79,14 +78,16 @@ module top_level(
         .frame_count(frame_count_hdmi)
     );
     localparam FB_SIZE = 256 * 240;
+    logic frame_buff_we = btn[1] ? patt_table_out_valid : 1;
+    logic [23:0] frame_buff_in = btn[1] ? patt_table_pix : pixel_out;
     xilinx_true_dual_port_read_first_2_clock_ram #(
         .RAM_WIDTH(24), //each entry in this memory is 24 bits for now, may be better to just store palette ram index tho and then convert here
         .RAM_DEPTH(FB_SIZE))
     frame_buffer (
         .addra(write_addr), //pixels are stored using this math
         .clka(clk_100mhz), // set to ppu clk?
-        .wea(patt_table_out_valid),
-        .dina(patt_table_pix),
+        .wea(frame_buff_we),
+        .dina(frame_buff_in),
         .ena(1'b1),
         .regcea(1'b1),
         .rsta(), // update
