@@ -20,38 +20,39 @@ module top_level(
     );
     logic [23:0] pixel_out;
     // Pattern Table Variables for debugging purpose
-    logic patt_table_ind;
+    // logic patt_table_ind;
     logic [7:0] patt_table_x;
     logic [7:0] patt_table_y;
-    logic [7:0] patt_table_pix;
+    logic [23:0] patt_table_pix;
     logic patt_table_out_valid;
     // logic [23:0] frame_buff_raw;
-    // logic clk_100_passthrough;
+    logic clk_100_passthrough;
     logic clk_pixel;
     logic          clk_5x;
 
     cw_hdmi_clk_wiz wizard_hdmi(
-        .sysclk(clk_100mhz),
+        .sysclk(clk_100_passthrough),
         .clk_pixel(clk_pixel),
         .clk_tmds(clk_5x),
         .reset(0)
     );
-
+    logic clk_100mhz_ibuff;
+    IBUF clk_ibuf (.I(clk_100mhz), .O(clk_100mhz_ibuff));
+    BUFG clk_bufg (.I(clk_100mhz_ibuff), .O(clk_100_passthrough));
     ppu my_ppu(
-        .clk(clk_100mhz),
+        .clk(clk_100_passthrough),
         .rst(),
         .cpu_dout(),
         .cpu_addr(),
         .cpu_din(),
         .pixel(pixel_out),
         .cpu_rw(),
-        .patt_table_ind(),
         .patt_table_x(patt_table_x),
         .patt_table_y(patt_table_y),
         .patt_table_pix(patt_table_pix),
         .patt_table_out_valid(patt_table_out_valid)
     );
-    logic [8:0] write_addr;
+    logic [16:0] write_addr;
     assign write_addr = 256*patt_table_y+patt_table_x;
 
 
@@ -78,15 +79,18 @@ module top_level(
         .active_draw(active_draw_hdmi),
         .frame_count(frame_count_hdmi)
     );
-    localparam FB_SIZE = 256 * 240;
+    localparam FB_DEPTH = 256 * 240;
+    localparam FB_SIZE = $clog2(FB_DEPTH);
+    logic frame_buff_we = btn[1] ? patt_table_out_valid : 1;
+    logic [23:0] frame_buff_in = btn[1] ? patt_table_pix : pixel_out;
     xilinx_true_dual_port_read_first_2_clock_ram #(
-        .RAM_WIDTH(24), //each entry in this memory is 24 bits
-        .RAM_DEPTH(FB_SIZE))
+        .RAM_WIDTH(24), //each entry in this memory is 24 bits for now, may be better to just store palette ram index tho and then convert here
+        .RAM_DEPTH(FB_DEPTH))
     frame_buffer (
         .addra(write_addr), //pixels are stored using this math
-        .clka(clk_100mhz), // set to ppu clk?
-        .wea(patt_table_out_valid),
-        .dina(patt_table_pix),
+        .clka(clk_100_passthrough), // set to ppu clk?
+        .wea(frame_buff_we),
+        .dina(frame_buff_in),
         .ena(1'b1),
         .regcea(1'b1),
         .rsta(), // update
@@ -97,12 +101,12 @@ module top_level(
         .web(1'b0),
         .enb(1'b1),
         .rstb(), // update
-        .regceb(1'b1)
-        // .doutb(frame_buff_raw)
+        .regceb(1'b1),
+        .doutb(frame_buff_raw)
     );
     // 
     logic [23:0] frame_buff_raw; //data out of frame buffer (565)
-    assign frame_buff_raw = 24'hFF33FF;
+    // assign frame_buff_raw = 24'hFF33FF;
     logic [FB_SIZE-1:0] addrb; //used to lookup address in memory for reading from buffer
     logic good_addrb; //used to indicate within valid frame for scaling
     logic good_addrb_bufs [1:0]; //used to indicate within valid frame for scaling

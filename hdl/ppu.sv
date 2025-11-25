@@ -14,13 +14,14 @@ module ppu (
         output logic [7:0] cpu_din,
         output logic [23:0] pixel, // 8 : 8 : 8 for now, might change to be 5 : 6 : 5?
         input wire cpu_rw,
-        output logic patt_table_ind, // 0 or 1
+        // output logic patt_table_ind, // 0 or 1
         output logic [7:0] patt_table_x,
         output logic [7:0] patt_table_y,
-        output logic [7:0] patt_table_pix,
+        output logic [23:0] patt_table_pix,
         output logic patt_table_out_valid
 
     );
+    logic patt_table_ind;
     logic [7:0] oam_data;
     logic [7:0] ppu_ctrl;
     logic [7:0] ppu_mask;
@@ -46,10 +47,10 @@ module ppu (
     // in the future, may want to use some input signal that runs at exactly PPU clock 
     
     initial begin
-         $readmemh(`FPATH(2C07.mem), sys_palette); // May need to change
-         $dumpfile("ppu.fst");
-         for (int i = 0; i < 64; i = i + 1)
-             $dumpvars(0, sys_palette[i]);
+        //  $readmemh(`FPATH(2C07.mem), sys_palette); // May need to change
+        //  $dumpfile("ppu.fst");
+        //  for (int i = 0; i < 64; i = i + 1)
+        //      $dumpvars(0, sys_palette[i]);
     end
     typedef enum logic [1:0] {
         FORCE_VSYNC_OFF = 2'd00,
@@ -61,7 +62,13 @@ module ppu (
 
     // Want to create a module but am delaying bc idk where i'll put palette read for now
     // and bc of the issue of passing unpacked modules btw modules
+    logic palette_ram_we;
+    logic palette_ram_data_in;
+    logic [4:0] palette_ram_inp_addr;
+    logic [23:0] palette_ram_output;
 
+    palette_ram palette_ram_ins (.clk(clk), .we(palette_ram_we), .inp_addr(palette_ram_inp_addr),
+    .din(palette_ram_data_in), .dout(palette_ram_output));
     // logic[15:0] read_addr;
     logic [7:0] ppu_data_buffer;
     logic[4:0] actual_read_addr;
@@ -114,7 +121,7 @@ module ppu (
     xilinx_true_dual_port_read_first_2_clock_ram #(
         .RAM_WIDTH(8), //each entry in this memory is a byte
         .RAM_DEPTH(4096*2),
-        .INIT_FILE(`FPATH(pattern_table_diagonal.mem))) //there are two sides of table, both with 4096 entries each
+        .INIT_FILE(`FPATH(chr_rom.mem))) //there are two sides of table, both with 4096 entries each
     patt_table (
         .addra(patt_table_wr_addr), //pixels are stored using this math
         .clka(clk),
@@ -168,9 +175,10 @@ module ppu (
 
     assign patt_table_re_addr = 16'h1000*patt_table_ind + 256 * tile_row + 16 * tile_col + rel_row + 8*get_tile_msb;// CHROM ONLY
     assign patt_table_out_valid = ~loading_stage;
-    assign patt_table_x = tile_row*16 + rel_row;
-    assign patt_table_y = tile_col*16 + rel_col;
-    assign patt_table_pix = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
+    assign patt_table_x =  patt_table_ind*128 + tile_col*8 + rel_col;
+    assign patt_table_y = tile_row*8 + rel_row;
+    assign palette_ram_inp_addr = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
+    assign patt_table_pix = palette_ram_output;
     always_ff @(posedge clk) begin
         
         if(rst) begin   
@@ -198,9 +206,6 @@ module ppu (
                             end
                         end 
                     end
-                end
-                if(!loading_stage) begin
-                    // patt_table_pix = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]}; // CHANGE
                 end
             end else begin
                 if(loading_stage & !first_time) begin
