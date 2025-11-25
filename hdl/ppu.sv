@@ -212,11 +212,11 @@ module ppu (
                     loading_stage_cycle <= (loading_stage_cycle == 4) ? 0 : loading_stage_cycle + 1;
                     if(loading_stage_cycle == 0) begin
                     end if(loading_stage_cycle == 1) begin
-                        get_tile_msb <= 1;
+                        get_tile_msb <= 0;
                     end else if (loading_stage_cycle == 2) begin
                         patt_table_lsb <= patt_table_out;
                     end else if (loading_stage_cycle == 3) begin
-                        get_tile_msb <= 0;
+                        get_tile_msb <= 1;
                         // patt_table_msb <= patt_table_out;
                     end else if (loading_stage_cycle == 4) begin
                         patt_table_msb <= patt_table_out;
