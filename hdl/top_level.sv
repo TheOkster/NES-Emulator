@@ -81,8 +81,8 @@ module top_level(
     );
     localparam FB_DEPTH = 256 * 240;
     localparam FB_SIZE = $clog2(FB_DEPTH);
-    logic frame_buff_we = patt_table_out_valid;
-    logic [23:0] frame_buff_in =  patt_table_pix;
+    logic frame_buff_we = btn[1] ? patt_table_out_valid : 1;
+    logic [23:0] frame_buff_in = btn[1] ? patt_table_pix : pixel_out;
     xilinx_true_dual_port_read_first_2_clock_ram #(
         .RAM_WIDTH(24), //each entry in this memory is 24 bits for now, may be better to just store palette ram index tho and then convert here
         .RAM_DEPTH(FB_DEPTH))
