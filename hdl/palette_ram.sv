@@ -11,6 +11,7 @@ module palette_ram
 (
     input  wire        clk,
     input  wire        we,
+    input  wire [4:0]  wri_addr,
     input  wire [4:0]  inp_addr,
     input  wire [7:0]  din,
     output logic [23:0]  dout

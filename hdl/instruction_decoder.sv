@@ -1,4 +1,4 @@
-`default_nettype none
+// `default_nettype none
 
 // define shared enums for addressing mode and opcode
 // package cpu_instructions; 
@@ -179,9 +179,9 @@ module instruction_decoder (
     logic [2:0] bbb;
     logic [1:0] cc;
 
-    assign aaa = instruction[7:5];
-    assign bbb = instruction[4:2];
-    assign cc = instruction[1:0];
+//     assign aaa = instruction[7:5];
+//     assign bbb = instruction[4:2];
+//     assign cc = instruction[1:0];
 
     always_comb begin
         case(cc)
@@ -458,14 +458,14 @@ module instruction_decoder (
             end
         endcase
 
-    end
+//     end
 
 
     
 
 
-endmodule
+// endmodule
 
-`default_nettype wire
+// `default_nettype wire
 
 
