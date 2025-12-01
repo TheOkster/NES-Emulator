@@ -39,6 +39,13 @@ module top_level(
     logic clk_100mhz_ibuff;
     IBUF clk_ibuf (.I(clk_100mhz), .O(clk_100mhz_ibuff));
     BUFG clk_bufg (.I(clk_100mhz_ibuff), .O(clk_100_passthrough));
+    logic [4:0] step;
+    // temporary
+    always_ff @(posedge clk_100_passthrough) begin
+        step <= (step == 18) ? 0 : step + 1;
+    end
+    logic ppu_clk_trig;
+    assign ppu_clk_trig = step == 0; // temporary
     ppu my_ppu(
         .clk(clk_100_passthrough),
         .rst(),
@@ -47,6 +54,8 @@ module top_level(
         .cpu_din(),
         .pixel(pixel_out),
         .cpu_rw(),
+        .is_cart_vertical(1),
+        .ppu_clk_trig(ppu_clk_trig),
         .patt_table_x(patt_table_x),
         .patt_table_y(patt_table_y),
         .patt_table_pix(patt_table_pix),

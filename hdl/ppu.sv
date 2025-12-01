@@ -106,11 +106,14 @@ module ppu (
     logic palette_ram_we;
     logic palette_ram_data_in;
     logic [4:0] palette_ram_inp_addr;
-        logic [4:0] palette_ram_wri_addr;
+    logic [4:0] palette_ram_inp_addr_ac;
+    logic [4:0] palette_ram_inp_addr_deb;
+    assign palette_ram_inp_addr_ac = (cycles_after >= 4) ? palette_ram_inp_addr_deb : palette_ram_inp_addr;
+    logic [4:0] palette_ram_wri_addr;
 
     logic [23:0] palette_ram_output;
 
-    palette_ram palette_ram_ins (.clk(clk), .we(palette_ram_we), .wri_addr(palette_ram_wri_addr), .inp_addr(palette_ram_inp_addr),
+    palette_ram palette_ram_ins (.clk(clk), .we(palette_ram_we), .wri_addr(palette_ram_wri_addr), .inp_addr(palette_ram_inp_addr_ac),
     .din(palette_ram_data_in), .dout(palette_ram_output));
     // logic[15:0] read_addr;
     logic [7:0] ppu_data_buffer;
@@ -144,6 +147,9 @@ module ppu (
     logic [7:0] patt_table_inp;
     logic [7:0] patt_table_out;
     logic [12:0] patt_table_re_addr;
+    logic [12:0] patt_table_re_addr_ac;
+    logic [12:0] patt_table_re_addr_deb;
+    assign patt_table_re_addr_ac = (cycles_after >= 4) ? patt_table_re_addr_deb : patt_table_re_addr;
     xilinx_true_dual_port_read_first_2_clock_ram #(
         .RAM_WIDTH(8), //each entry in this memory is a byte
         .RAM_DEPTH(4096*2),
@@ -157,7 +163,7 @@ module ppu (
         .regcea(1'b1),
         .rsta(rst),
         .douta(), //never read from this side
-        .addrb(patt_table_re_addr),//transformed lookup pixel
+        .addrb(patt_table_re_addr_ac),//transformed lookup pixel
         .dinb(8'b0),
         .clkb(clk),
         .web(1'b0),
@@ -201,19 +207,15 @@ module ppu (
     logic loading_stage;
     logic [2:0] loading_stage_cycle;
 
-
-    assign patt_table_out_valid = ~loading_stage & cycles_after > 4;
+logic patt_table_avail;
+    assign patt_table_avail = ~loading_stage & cycles_after > 4 & !ppu_clk_trig;
     assign patt_table_x =  patt_table_ind*128 + tile_col*8 + rel_col;
     assign patt_table_y = tile_row*8 + rel_row;
     assign patt_table_pix = palette_ram_output;
+    assign patt_table_re_addr_deb = 16'h1000*patt_table_ind + 256 * tile_row + 16 * tile_col + rel_row + 8*get_tile_msb;
+    assign palette_ram_inp_addr_deb = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
 
-    
     always_ff @(posedge clk) begin
-        if (cycles_after >= 4) begin
-             patt_table_re_addr <= 16'h1000*patt_table_ind + 256 * tile_row + 16 * tile_col + rel_row + 8*get_tile_msb;// CHROM ONLY
-            palette_ram_inp_addr <= {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
-
-        end
         if(rst) begin   
             get_tile_msb <= 0;
             tile_row <= 0;
@@ -225,22 +227,22 @@ module ppu (
             patt_table_ind <= 0;
             // patt_table_pix <= 0;
         end else begin
-            if(ppu_clk_trig & !first_time) begin
-                if(patt_table_out_valid) begin
-                    rel_col <= (rel_col == 7) ? 0 :rel_col + 1;
-                    if(rel_col == 7) begin
-                        rel_row <= (rel_row == 7) ? 0 :rel_row + 1;
-                        loading_stage <= 1; // cycle shoudl be 0
-                        if(rel_row == 7) begin
-                            tile_col <= (tile_col == 15) ? 0 : tile_col + 1;
-                            if(tile_col == 15) begin
-                                tile_row <= (tile_row == 15) ? 0 : tile_row + 1;
-                                patt_table_ind <= (tile_row == 15) ? ~patt_table_ind : patt_table_ind;
-                            end
-                        end 
-                    end
+            if(patt_table_avail & !first_time) begin
+                patt_table_out_valid <= 1;
+                rel_col <= (rel_col == 7) ? 0 :rel_col + 1;
+                if(rel_col == 7) begin
+                    rel_row <= (rel_row == 7) ? 0 :rel_row + 1;
+                    loading_stage <= 1; // cycle shoudl be 0
+                    if(rel_row == 7) begin
+                        tile_col <= (tile_col == 15) ? 0 : tile_col + 1;
+                        if(tile_col == 15) begin
+                            tile_row <= (tile_row == 15) ? 0 : tile_row + 1;
+                            patt_table_ind <= (tile_row == 15) ? ~patt_table_ind : patt_table_ind;
+                        end
+                    end 
                 end
             end else begin
+                patt_table_out_valid <= 0;
                 if(loading_stage & !first_time) begin
                     loading_stage_cycle <= (loading_stage_cycle == 4) ? 0 : loading_stage_cycle + 1;
                     if(loading_stage_cycle == 0) begin
@@ -302,11 +304,12 @@ module ppu (
             dot <= 0;
             scanline <= 0;
             palette_ram_we <= 0;
+            cycles_after <= 0;
             w <= 1;
         end else begin
             // palette_ram_we <= (cpu_rw == CPU_WRITE && cpu_addr[2:0] == 3'h7 && ppu_addr >= 16'h3F00);
             first_time <= 0;
-            cycle <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : (cycle + 1);
+            cycles_after <= (ppu_clk_trig) ? 1 : (cycles_after + 1);
              // rename
             // TODO Add Test Cases for timing
             // verify there are no off by one errors
@@ -356,12 +359,12 @@ module ppu (
                             if (cycles_after == 3) next_tile_at <= (name_table_out >> (quadrant * 2)) & 3'h3;
                         end
                         5: begin
-                            if (cycles_after == 1) patt_table_re_addr <= back_pat_addr_switch << 12 + (next_tile_nt << 4) + (vram_fine_y + 0);
+                            if (cycles_after == 1 & !ppu_clk_trig) patt_table_re_addr <= back_pat_addr_switch << 12 + (next_tile_nt << 4) + (vram_fine_y + 0);
                             // 2 cycles later
                             if (cycles_after == 3) bg_nt_lsb <= patt_table_out;
                         end
                         7: begin
-                            if (cycles_after == 1)  patt_table_re_addr <= back_pat_addr_switch << 12 + (next_tile_nt << 4) + (vram_fine_y + 8);
+                            if (cycles_after == 1 & !ppu_clk_trig)  patt_table_re_addr <= back_pat_addr_switch << 12 + (next_tile_nt << 4) + (vram_fine_y + 8);
                             // 2 cycles later
                             if (cycles_after == 3) bg_nt_msb <= patt_table_out;
                         end
@@ -406,6 +409,19 @@ module ppu (
                             vram_coarse_x <= temp_vram_coarse_x;
                         end
                     end
+
+                    if(ppu_mask[3]) begin
+                        if(cycles_after == 1) palette_ram_inp_addr <= 4 * {pix_pal_msbit, pix_pal_lsbit} + {pix_msbit, pix_lsbit};
+                        // 1 cycle later
+                        if(cycles_after == 2) begin
+                            pixel_x <= (dot - 1);
+                            pixel_y <= scanline;
+                            pixel_valid <= 1;
+                            pixel <= palette_ram_output;
+                        end else begin
+                            pixel_valid <= 0;
+                        end
+                    end
                 end
 
                 if(scanline == 261 && 280 <= dot && dot < 305) begin
@@ -415,22 +431,6 @@ module ppu (
                     end            
                 end
             end
-
-
-
-
-        if(ppu_mask[3]) begin
-            if(ppu_clk_trig) palette_ram_inp_addr <= 4 * {pix_pal_msbit, pix_pal_lsbit} + {pix_msbit, pix_lsbit};
-            // 1 cycle later
-            if(cycles_after == 2) begin
-                pixel_x <= (cycle - 1);
-                pixel_y <= scanline;
-                pixel_valid <= 1;
-                pixel <= palette_ram_output;
-            end else begin
-                pixel_valid <= 0;
-            end
-        end
         end
 
             /* Verify later */
