@@ -62,7 +62,7 @@ module ppu (
     logic [4:0] cycles_after;
     logic first_time;
     logic[8:0] dot;
-    logic[8:0] scanline; // This is the scanline plus 1 to avoid signed numbers issues, will change name / function
+    logic[8:0] scanline = 260; // This is the scanline plus 1 to avoid signed numbers issues, will change name / function
     localparam PPU_CYCLES_PER_CLOCK_CYCLE = 19; // This is not correct but closest integer multiplier
     // in the future, may want to use some input signal that runs at exactly PPU clock 
     
@@ -301,8 +301,8 @@ logic patt_table_avail;
             // may need to rid (end)
             cycle <= 0;
             first_time <= 1;
-            dot <= 0;
-            scanline <= 0;
+            dot <= 340;
+            scanline <= 260;
             palette_ram_we <= 0;
             cycles_after <= 0;
             w <= 1;
@@ -403,13 +403,14 @@ logic patt_table_avail;
                         end
                     end
 
-                    if(cycle == 257) begin
+                    if(dot == 257) begin
                         if(ppu_mask[4] || ppu_mask[3]) begin
                             vram_name_table_sel[0] <= temp_vram_coarse_x[0];
                             vram_coarse_x <= temp_vram_coarse_x;
                         end
                     end
-
+                end
+                if(1 <= dot && dot <= 256 && 0 <= scanline && scanline < 240) begin
                     if(ppu_mask[3]) begin
                         if(cycles_after == 1) palette_ram_inp_addr <= 4 * {pix_pal_msbit, pix_pal_lsbit} + {pix_msbit, pix_lsbit};
                         // 1 cycle later
@@ -423,7 +424,6 @@ logic patt_table_avail;
                         end
                     end
                 end
-
                 if(scanline == 261 && 280 <= dot && dot < 305) begin
                     if(ppu_mask[4] || ppu_mask[3]) begin
                         vram_name_table_sel[1] <= temp_vram_coarse_x[1];

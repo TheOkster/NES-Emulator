@@ -63,7 +63,7 @@ palette_ram[29] = 8'h18;
 palette_ram[30] = 8'h28;
 palette_ram[31] = 8'h38;
 
-         $dumpfile("palette_ram.fst");
+        //  $dumpfile("palette_ram.fst");
          for (int i = 0; i < 64; i = i + 1)
              $dumpvars(0, sys_palette[i]);
         for (int i = 0; i < 31; i = i + 1)
