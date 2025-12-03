@@ -18,11 +18,11 @@ module cartridge (
         input logic [7:0] ppu_dout,
         input logic [13:0] ppu_addr,
         output wire [7:0] ppu_din,
-        output logic ppu_din_valid;
+        output logic ppu_din_valid,
         input logic ppu_rw,
     );
 
-    mapper0 (
+    mapper0 mapper (
         .clk(clk),
         .rst(rst),
         .cpu_dout(cpu_dout),
@@ -34,7 +34,7 @@ module cartridge (
         .ppu_addr(ppu_addr),
         .ppu_din(ppu_din),
         .ppu_din_valid(ppu_din_valid),
-        .ppu_rw(ppu_rw),
+        .ppu_rw(ppu_rw)
     );
 endmodule
 
@@ -50,11 +50,11 @@ module mapper0 (
         input logic [13:0] ppu_addr,
         input logic cpu_rw,
 
-        output logic [7:0] cpu_din;
-        output logic cpu_din_valid;
+        output logic [7:0] cpu_din,
+        output logic cpu_din_valid,
 
-        output logic [7:0] ppu_din;
-        output logic ppu_din_valid;
+        output logic [7:0] ppu_din,
+        output logic ppu_din_valid
 )
     logic [15:0] cpu_mapped_addr;
     logic [13:0] ppu_mapped_addr;
@@ -64,13 +64,13 @@ module mapper0 (
             cpu_mapped_addr = 0;
             cpu_din_valid = 0;
         } else {
-            cpu_mapped_addr = (cpu_addr - 16'h8000) & 16'h8000
+            cpu_mapped_addr = (cpu_addr - 16'h8000) & 16'h8000;
             cpu_din_valid = 1;
         }
     end
 
     always_comb begin
-        ppu_mapped_addr = ppu_addr
+        ppu_mapped_addr = ppu_addr;
         ppu_din_valid = 1;
     end
 
@@ -78,7 +78,7 @@ module mapper0 (
         .RAM_WIDTH(8), //each entry in this memory is a byte
         .RAM_DEPTH(16'h8000),
         .INIT_FILE(`FPATH(prg_rom.mem))) 
-    patt_table (
+    prg_rom (
         .addra(), //pixels are stored using this math
         .clka(clk),
         .wea(0),
@@ -101,7 +101,7 @@ module mapper0 (
         .RAM_WIDTH(8), //each entry in this memory is a byte
         .RAM_DEPTH(8192),
         .INIT_FILE(`FPATH(chr_rom.mem))) //there are two sides of table, both with 4096 entries each
-    patt_table (
+    chr_rom (
         .addra(), //pixels are stored using this math
         .clka(clk),
         .wea(0),

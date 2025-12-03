@@ -29,6 +29,8 @@ module top_level(
     logic clk_100_passthrough;
     logic clk_pixel;
     logic          clk_5x;
+    logic sys_rst;
+    assign sys_rst = btn[0];
 
     cw_hdmi_clk_wiz wizard_hdmi(
         .sysclk(clk_100_passthrough),
@@ -36,22 +38,51 @@ module top_level(
         .clk_tmds(clk_5x),
         .reset(0)
     );
+
+    logic clk_nes;
+    (
+        .clk_100mhz(clk_100_passthrough),
+        .clk_nes(clk_nes),
+        .reset(sys_rst)
+        .locked(0)
+    )
+
     logic clk_100mhz_ibuff;
     IBUF clk_ibuf (.I(clk_100mhz), .O(clk_100mhz_ibuff));
     BUFG clk_bufg (.I(clk_100mhz_ibuff), .O(clk_100_passthrough));
-    logic [4:0] step;
-    // temporary
-    always_ff @(posedge clk_100_passthrough) begin
-        step <= (step == 18) ? 0 : step + 1;
-    end
-    logic ppu_clk_trig;
-    assign ppu_clk_trig = step == 0; // temporary
+
+    logic [15:0] cpu_addr;
+    logic [7:0] cpu_dout;
+    logic [7:0] cpu_din;
+    logic cpu_din_valid;
+    logic cpu_rw;
+
+    cpu my_cpu(
+        .clk(clk_nes),
+        .rst(sys_rst),
+
+        .dout(cpu_dout),
+        .addr(cpu_addr),
+        .din(cpu_din),
+        .din_valid(cpu_din_valid),
+        .rw(cpu_rw),
+
+        .irq(),
+        .nmi(),
+
+        .audio_out()
+    )
+
+    logic [7:0] ppu_cpu_din;
+    logic ppu_cpu_din_valid;
+
     ppu my_ppu(
         .clk(clk_100_passthrough),
         .rst(),
-        .cpu_dout(),
-        .cpu_addr(),
-        .cpu_din(),
+        .cpu_dout(cpu_dout),
+        .cpu_addr(cpu_addr),
+        .cpu_din(ppu_cpu_din),
+        .cpu_din_valid(ppu_cpu_din_valid),
         .pixel(pixel_out),
         .cpu_rw(),
         .is_cart_vertical(1),
@@ -61,6 +92,30 @@ module top_level(
         .patt_table_pix(patt_table_pix),
         .patt_table_out_valid(patt_table_out_valid)
     );
+
+    logic [7:0] cart_cpu_din;
+    logic cart_cpu_din_valid;
+    cartridge my_cartridge (
+        .clk(clk),
+        .rst(rst),
+        .cpu_dout(cpu_dout),
+        .cpu_addr(cpu_addr),
+        .cpu_din(cart_cpu_din),
+        .cpu_din_valid(cart_cpu_din_valid),
+        .ppu_rw(ppu_rw),
+        .ppu_dout(ppu_dout),
+        .ppu_addr(ppu_addr),
+        .ppu_din(ppu_din),
+        .ppu_din_valid(ppu_din_valid),
+        .ppu_rw(ppu_rw)
+    );
+
+    assign cpu_din_valid = cart_cpu_din_valid || ppu_cpu_din_valid;
+    assign cpu_din = 
+        cart_cpu_din_valid ? cart_cpu_din : 
+        ppu_cpu_din_valid ? ppu_cpu_din : 
+        0;
+
     logic [16:0] write_addr;
     assign write_addr = 256*patt_table_y+patt_table_x;
 

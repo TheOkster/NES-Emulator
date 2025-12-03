@@ -12,6 +12,7 @@ module ppu (
         input wire [7:0] cpu_dout,
         input wire [15:0] cpu_addr, // from what i'm seeing, in the hardware it's only 3 bits?
         output logic [7:0] cpu_din,
+        output logic cpu_din_valid,
         output logic [23:0] pixel, // 8 : 8 : 8 for now, might change to be 5 : 6 : 5?
         input wire cpu_rw,
         input wire is_cart_vertical,
