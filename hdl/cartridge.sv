@@ -12,12 +12,29 @@ module cartridge (
         input logic [7:0] cpu_dout,
         input logic [15:0] cpu_addr,
         output wire [7:0] cpu_din,
+        output logic cpu_din_valid;
         input logic cpu_rw,
     
         input logic [7:0] ppu_dout,
         input logic [13:0] ppu_addr,
         output wire [7:0] ppu_din,
+        output logic ppu_din_valid;
         input logic ppu_rw,
+    );
+
+    mapper0 (
+        .clk(clk),
+        .rst(rst),
+        .cpu_dout(cpu_dout),
+        .cpu_addr(cpu_addr),
+        .cpu_din(cpu_din),
+        .cpu_din_valid(cpu_din_valid),
+        .ppu_rw(ppu_rw),
+        .ppu_dout(ppu_dout),
+        .ppu_addr(ppu_addr),
+        .ppu_din(ppu_din),
+        .ppu_din_valid(ppu_din_valid),
+        .ppu_rw(ppu_rw),
     );
 endmodule
 
@@ -33,11 +50,11 @@ module mapper0 (
         input logic [13:0] ppu_addr,
         input logic cpu_rw,
 
-        output logic [7:0] cpu_dout;
-        output logic cpu_dout_valid;
+        output logic [7:0] cpu_din;
+        output logic cpu_din_valid;
 
-        output logic [7:0] ppu_dout;
-        output logic ppu_dout_valid;
+        output logic [7:0] ppu_din;
+        output logic ppu_din_valid;
 )
     logic [15:0] cpu_mapped_addr;
     logic [13:0] ppu_mapped_addr;
@@ -45,16 +62,16 @@ module mapper0 (
     always_comb begin
         if (cpu_addr < 16'h8000) {
             cpu_mapped_addr = 0;
-            cpu_dout_valid = 0;
+            cpu_din_valid = 0;
         } else {
             cpu_mapped_addr = (cpu_addr - 16'h8000) & 16'h8000
-            cpu_dout_valid = 1;
+            cpu_din_valid = 1;
         }
     end
 
     always_comb begin
         ppu_mapped_addr = ppu_addr
-        ppu_dout_valid = 1;
+        ppu_din_valid = 1;
     end
 
     xilinx_true_dual_port_read_first_2_clock_ram #(
@@ -77,7 +94,7 @@ module mapper0 (
         .enb(1'b1),
         .rstb(rst),
         .regceb(1'b1),
-        .doutb(cpu_dout)
+        .doutb(cpu_din)
     );
 
     xilinx_true_dual_port_read_first_2_clock_ram #(
@@ -100,7 +117,7 @@ module mapper0 (
         .enb(1'b1),
         .rstb(rst),
         .regceb(1'b1),
-        .doutb(ppu_dout)
+        .doutb(ppu_din)
     );
 
 endmodule
