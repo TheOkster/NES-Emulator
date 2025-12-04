@@ -24,7 +24,6 @@ module ppu (
         output logic [23:0] patt_table_pix,
         output logic patt_table_out_valid,
         output logic nmi
-
     );
     logic patt_table_ind;
     logic [7:0] oam_data;
