@@ -125,6 +125,10 @@ module cpu (
        REST
     } state_enum; 
 
+
+   
+    // changes based on addressing mode
+
     logic opcode; 
     logic addressing_mode_stored;
     logic [5:0] count;
@@ -132,7 +136,10 @@ module cpu (
 
 
     logic instruction_received; 
-    logic [7:0] instruction;
+    logic [2:0] instruction_request_count; 
+    logic [7:0] instruction; // opcode/addressing mode
+    logic [7:0] instruction_arg; // arg 
+    logic [7:0] instruction_arg2;
 
     logic mem_received; 
     logic [7:0] memory;
@@ -152,6 +159,8 @@ module cpu (
     assign aaa = instruction[7:5];
     assign bbb = instruction[4:2];
     assign cc = instruction[1:0];
+
+
 
     always_comb begin
         case(cc)
@@ -427,19 +436,140 @@ module cpu (
                 addressing_mode = UNSUPPORTED_AM;
             end
         endcase
-
     end
 
+    // get address based on addressing mode 
+    // and register values - should only be read 
+    // when instruction variable contains
+    // instruction for which we want to find the memory address
+    // and before we simulate this instruction
 
+    logic error; 
+
+    logic instruction_requests_needed [1:0];
+    logic [2:0] mem_requests_needed;
+    always_comb begin
+        case (addressing_mode) 
+            ZERO_PAGE_X: begin
+                instruction_requests_needed = 2;
+                mem_requests_needed = 1;
+            end
+            ZERO_PAGE_Y: begin
+                instruction_requests_needed = 2;
+                mem_requests_needed = 1;
+            end
+            ABSOLUTE_X: begin
+                instruction_requests_needed = 3; 
+                mem_requests_needed = 1;
+            end
+            ABSOLUTE_Y: begin
+                instruction_requests_needed = 3;
+                mem_requests_needed = 1;
+            end
+            INDEXED_INDIRECT: begin
+                instruction_requests_needed = 2;
+                mem_requests_needed = 3;
+            end
+            INDIRECT_INDEXED: begin
+                instruction_requests_needed = 2;
+                mem_requests_needed = 3;
+            end
+            ACCUMULATOR: begin
+                instruction_requests_needed = 1;
+                mem_requests_needed = 0;
+            end
+            IMMEDIATE: begin
+                instruction_requests_needed = 2;
+                mem_requests_needed = 0; 
+            end
+            ZERO_PAGE: begin
+                instruction_requests_needed = 2;
+                mem_requests_needed = 1;
+            end
+            ABSOLUTE: begin
+                instruction_requests_needed = 3;
+                mem_requests_needed = 1;
+            end
+            default: error <= 1;
+        endcase
+    end
+
+    logic [15:0] addr_comb; 
+    logic [7:0] addr_one_byte;
+    logic [7:0] addr_one_byte2;
+
+    
+    logic [2:0] mem_requests_done;
+
+    always_comb begin
+        case (addressing_mode) 
+            ZERO_PAGE_X: begin
+                addr_comb = {8'b0, (instruction_arg + x)[7:0]}; 
+            end 
+            ZERO_PAGE_Y:  begin
+                addr_comb = {8'b0, (instruction_arg + y)[7:0]};
+            end 
+            ABSOLUTE_X: addr_comb = {instruction_arg, instruction_arg2} + x;
+            ABSOLUTE_Y: addr_comb = {instruction_arg, instruction_arg2} + y;
+            INDEXED_INDIRECT: begin
+                if (mem_requests_done == 0) begin
+                    addr_comb = {8'b0, (instruction_arg + x)[7:0]}; 
+                end else if (mem_requests_done == 1) begin
+                    addr_comb = {8'b0, (instruction_arg + x + 1)[7:0]}; 
+                end else begin
+                    addr_comb = {intermediate_mem2[7:0], intermediate_mem1[7:0]};
+                end
+            end
+            INDIRECT_INDEXED: begin
+                if (mem_requests_done == 0) begin
+                    addr_comb = {8'b0, (instruction_arg)[7:0]}; 
+                end else if (mem_requests_done == 1) begin
+                    addr_comb = {8'b0, (instruction_arg + 1)[7:0]}; 
+                end else begin
+                    addr_comb = intermediate_mem1 + {intermediate_mem2[7:0], y};
+                end
+            end
+            ACCUMULATOR: addr_comb <= 0;
+            // no mem
+            IMMEDIATE: addr_comb <= 0;
+            // no mem
+            ZERO_PAGE: addr_comb = {8'b0, instruction_arg};
+            ABSOLUTE: addr_comb = {instruction_arg, instruction_arg2} 
+            default: error <= 1;
+
+        endcase 
+    end
 
 
 
     always_ff @(clk_fast) begin
         
         if ((state == REQUESTED_INSTRUCTION) && (!instruction_received) && din_valid) begin
-            instruction <= din;
-            instruction_received <= 1;
-            state <= INSTRUCTION_RECEIVED; 
+            if (instruction_request_count == 0) begin
+                instruction <= din;
+                instruction_request_count <= 1;
+                // request next bit for accumulator addressing mode but
+                // shouldn't be an issue
+                dout <= 0;
+                addr <= pc + 1;
+                rw <= 0;
+            end else if (instruction_request_count == 1) begin
+                instruction_arg <= din;
+                instruction_request_count <= 2;
+                if (instruction_requests_needed <= 2) begin
+                    instruction_received <= 1;
+                    state <= INSTRUCTION_RECEIVED;
+                end else begin
+                    dout <= 0;
+                    addr <= pc + 2;
+                    rw <= 0;
+                end
+            end else begin
+                instruction_arg2 <= din;
+                instruction_request_count <= instruction_request_count + 1;
+                instruction_received <= 1;
+                state <= INSTRUCTION_RECEIVED;
+            end
         end
 
         if ((state == REQUESTED_MEM) && (!mem_received) && din_valid) begin
@@ -772,10 +902,10 @@ module cpu (
                 state <= REST; 
             end
 
-            if (state == REST) begin
-                // wait some number of cycles before going back to start state
-                state <= START; 
-            end
+            // if (state == REST) begin
+            //     // wait some number of cycles before going back to start state
+            //     state <= START; 
+            // end
         end
 
     end
