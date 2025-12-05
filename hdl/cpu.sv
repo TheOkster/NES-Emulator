@@ -7,7 +7,7 @@ module cpu (
         output logic [7:0] dout,
         output logic [15:0] addr,
         input wire [7:0] din,
-        input wire din_valid;
+        input wire din_valid,
         output logic rw,
 
         input wire irq,
@@ -115,22 +115,20 @@ module cpu (
     } opcode_types;
 
     typedef enum {
-        START
        REQUESTED_INSTRUCTION, 
        INSTRUCTION_RECEIVED, 
        REQUESTED_MEM,
        MEM_VAL_RECEIVED, 
        SIMULATE_INSTRUCTION, 
        MEM_WRITTEN,
-       REST
+       REST, 
+       ERROR
     } state_enum; 
 
 
    
     // changes based on addressing mode
 
-    logic opcode; 
-    logic addressing_mode_stored;
     logic [5:0] count;
     logic [5:0] estimated_cycles;
 
@@ -143,6 +141,12 @@ module cpu (
 
     logic mem_received; 
     logic [7:0] memory;
+
+    logic [7:0] intermediate_mem1;
+    logic [7:0] intermediate_mem2;
+
+    logic [5:0] state;
+
 
 
 
@@ -160,6 +164,7 @@ module cpu (
     assign bbb = instruction[4:2];
     assign cc = instruction[1:0];
 
+    logic [7:0] temp1;
 
 
     always_comb begin
@@ -444,9 +449,7 @@ module cpu (
     // instruction for which we want to find the memory address
     // and before we simulate this instruction
 
-    logic error; 
-
-    logic instruction_requests_needed [1:0];
+    logic [1:0] instruction_requests_needed;
     logic [2:0] mem_requests_needed;
     always_comb begin
         case (addressing_mode) 
@@ -504,27 +507,33 @@ module cpu (
     always_comb begin
         case (addressing_mode) 
             ZERO_PAGE_X: begin
-                addr_comb = {8'b0, (instruction_arg + x)[7:0]}; 
+                addr_comb[7:0] = instruction_arg + x;
+                addr_comb[15:8] = 8'b0;
             end 
             ZERO_PAGE_Y:  begin
-                addr_comb = {8'b0, (instruction_arg + y)[7:0]};
+                addr_comb[7:0] = instruction_arg + y;
+                addr_comb[15:8] = 8'b0;
             end 
             ABSOLUTE_X: addr_comb = {instruction_arg, instruction_arg2} + x;
             ABSOLUTE_Y: addr_comb = {instruction_arg, instruction_arg2} + y;
             INDEXED_INDIRECT: begin
                 if (mem_requests_done == 0) begin
-                    addr_comb = {8'b0, (instruction_arg + x)[7:0]}; 
+                    addr_comb[7:0] = instruction_arg + x;
+                    addr_comb[15:8] = 8'b0;
                 end else if (mem_requests_done == 1) begin
-                    addr_comb = {8'b0, (instruction_arg + x + 1)[7:0]}; 
+                    addr_comb[7:0] = instruction_arg + x + 1; 
+                    addr_comb[15:8] = 8'b0;
                 end else begin
                     addr_comb = {intermediate_mem2[7:0], intermediate_mem1[7:0]};
                 end
             end
             INDIRECT_INDEXED: begin
                 if (mem_requests_done == 0) begin
-                    addr_comb = {8'b0, (instruction_arg)[7:0]}; 
+                    addr_comb[7:0] = instruction_arg;
+                    addr_comb[15:8] = 8'b0;
                 end else if (mem_requests_done == 1) begin
-                    addr_comb = {8'b0, (instruction_arg + 1)[7:0]}; 
+                    addr_comb[7:0] = instruction_arg + 1;
+                    addr_comb[15:8] = 8'b0;
                 end else begin
                     addr_comb = intermediate_mem1 + {intermediate_mem2[7:0], y};
                 end
@@ -534,15 +543,14 @@ module cpu (
             IMMEDIATE: addr_comb <= 0;
             // no mem
             ZERO_PAGE: addr_comb = {8'b0, instruction_arg};
-            ABSOLUTE: addr_comb = {instruction_arg, instruction_arg2} 
-            default: error <= 1;
-
+            ABSOLUTE: addr_comb = {instruction_arg, instruction_arg2}; 
+            default: error = 1;
         endcase 
     end
 
 
 
-    always_ff @(clk_fast) begin
+    always_ff @(posedge clk_fast) begin
         
         if ((state == REQUESTED_INSTRUCTION) && (!instruction_received) && din_valid) begin
             if (instruction_request_count == 0) begin
@@ -573,21 +581,41 @@ module cpu (
         end
 
         if ((state == REQUESTED_MEM) && (!mem_received) && din_valid) begin
-            memory <= din; 
-            mem_received <= 1;
-            state <= MEM_VAL_RECEIVED; 
+            if (mem_requests_needed == 1) begin
+                memory <= din; 
+                mem_received <= 1;
+                state <= MEM_VAL_RECEIVED; 
+            end else begin
+                if (mem_requests_done == 1) begin
+                    intermediate_mem1 <= din;
+                    dout <= 0; 
+                    addr <= addr_comb; 
+                    rw <= 0; 
+                end else if (mem_requests_done == 2) begin
+                    intermediate_mem2 <= din;
+                    dout <= 0; 
+                    addr <= addr_comb; 
+                    rw <= 0; 
+                end else begin
+                    memory <= din; 
+                    mem_received <= 1;
+                    state <= MEM_VAL_RECEIVED; 
+                end
+            end
         end
 
         // for now don't do an acknowledgment that mem written
     end
 
-    always_ff @(clk_slow) begin
+    always_ff @(posedge clk_slow) begin
         if (rst) begin
             // set initial register values
             count <= 0; 
             estimated_cycles <= 2;
+            error <= 0;
 
         end else begin
+            
 
             if (count >= estimated_cycles) begin // done with current instruction
                 if (!(instruction_done && state == REST)) begin
@@ -599,313 +627,331 @@ module cpu (
                     rw <= 0; // read
                     state <= REQUESTED_INSTRUCTION;
                     instruction_done <= 0;
+                    mem_requests_done <= 0;
                 end
             end else if (!(state == ERROR)) begin
                 count <= count + 1;
             end
 
-            // if instruction is done and count reached estimated cycles, reset state
-            // otherwise just increment count
-            // if (state == START) begin
-            //     dout <= 0;
-            //     addr <= pc;
-            //     rw <= 0; // read
-            //     state <= REQUESTED_INSTRUCTION;
-            // end
-            if (state == INSTRUCTION_RECEIVED) begin
-                instruction_received <= 0;
-                //  decode instruction
-                opcode_stored <= opcode; 
-                addressing_mode_stored <= addressing_mode;
+            if (error == 1 || state == ERROR) begin
+                state <= ERROR;
+            end else begin
 
-                dout <= 0;
-                addr <= ; // compute addr based on addressing mode
-                rw <= 0; 
-                state <= REQUESTED_MEM;
+                if (state == INSTRUCTION_RECEIVED) begin
+                    instruction_received <= 0;
+                    //  decode instruction
+                    opcode_stored <= opcode; 
+                    addressing_mode_stored <= addressing_mode;
 
+                    // start memory requests
+                    if (mem_requests_needed == 0) begin // accumulator or immediate
+                        if (addressing_mode == ACCUMULATOR) begin
+                            memory <= a;
+                        end else if (addressing_mode == IMMEDIATE) begin
+                            memory <= instruction_arg;
+                        end else begin
+                            state <= ERROR;
+                        end
+
+                        state <= MEM_VAL_RECEIVED;
+                    end else begin
+                        dout <= 0; 
+                        addr <= addr_comb; 
+                        rw <= 0; 
+                        state <= REQUESTED_MEM;
+
+                    end
+
+                end
+
+                if (state == MEM_VAL_RECEIVED) begin
+                    pc <= pc + instruction_requests_needed; // will be overwritten by branch instructions
+                    // simulate instruction
+                    state <= REST;
+                    instruction_done <= 1; // ????
+                    // maybe update correct number of cycles based on opcode/addressing mode
+
+                    // below we store current reguster values, 
+                    // possibly override them based on computation (do after memory is ready)
+                    case (opcode) 
+                        ADC: begin
+                            result = {1'b0, a} + {1'b0, memory} + c; 
+                            a <= result[7:0];
+                            c <= result[8];
+                            z <= result == 0;
+                            temp1 = ((result ^ a) & (result ^ memory));
+                            v <= temp1[7];
+                            n <= result[7];
+                            
+                        end
+                        AND: begin
+                            result = a & memory;
+                            a <= result[7:0];
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        ASL: begin
+                            result = memory << 1;
+                            // write result[7:0] to memory
+                            c <= memory[7];
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        BCC: begin
+                            if (c == 1'b0) begin
+                                pc <= $signed({1'b0, pc}) + $signed(3'b010) + $signed(memory);
+                            end
+                        end
+                        BCS: begin
+                            if (c == 1'b1) begin
+                                pc <= $signed({1'b0, pc}) + $signed(3'b010) + $signed(memory);
+                            end
+                        end
+                        BEQ: begin
+                            if (z == 1'b1) begin
+                                pc <= $signed({1'b0, pc}) + $signed(3'b010) + $signed(memory);
+                            end
+                        end
+                        BIT: begin
+                            result = a & memory;
+                            z <= result == 0;
+                            v <= result[6];
+                            n <= result[7];
+                        end
+                        BMI: begin
+                            if (n == 1'b1) begin
+                                pc <= $signed({1'b0, pc}) + $signed(3'b010) + $signed(memory);
+                            end
+                        end
+                        BNE: begin
+                            if (z == 1'b0) begin
+                                pc <= $signed({1'b0, pc}) + $signed(3'b010) + $signed(memory);
+                            end
+                        end
+                        BPL: begin
+                            if (n == 1'b0) begin
+                                pc <= $signed({1'b0, pc}) + $signed(3'b010) + $signed(memory);
+                            end
+                        end
+                        BRK: state <= ERROR;
+                        // interrupt
+                        BVC: begin
+                            if (v == 1'b0) begin
+                                pc <= $signed({1'b0, pc}) + $signed(3'b010) + $signed(memory);
+                            end
+                        end
+                        BVS: begin
+                            if (v == 1'b1) begin
+                                pc <= $signed({1'b0, pc}) + $signed(3'b010) + $signed(memory);
+                            end
+                        end
+                        CLC: c <= 1'b0;
+                        CLD: d <= 1'b0;
+                        CLI: i <= 1'b0;
+                        CLV: v <= 1'b0;
+                        CMP: begin
+                            result = a - memory; 
+                            c <= a >= memory; 
+                            z <= a == memory;
+                            n <= result[7];
+                        end
+                        CPX: begin
+                            result = x - memory; 
+                            c <= x >= memory; 
+                            z <= x == memory;
+                            n <= result[7];
+                        end
+                        CPY: begin
+                            result = y - memory; 
+                            c <= y >= memory; 
+                            z <= y == memory;
+                            n <= result[7];
+                        end
+                        DEC: begin
+                            result = memory - 1;
+                            // signed or unsigned???
+                            dout <= result;
+                            addr <= addr_comb;
+                            rw <= 1; // write
+                            state <= REST; 
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        DEX: begin
+                            result = x - 1;
+                            x <= result[7:0];
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        DEY: begin
+                            result = y - 1;
+                            y <= result[7:0];
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        EOR: begin
+                            result = a ^ memory; 
+                            a <= result[7:0];
+                            z <= result == 0;
+                            n <= result[7];
+                        end 
+                        INC: begin
+                            result = memory + 1;
+                            dout <= result;
+                            addr <= addr_comb;
+                            rw <= 1; // write
+                            state <= REST; 
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        INX: begin
+                            result = x + 1;
+                            x <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        INY:  begin
+                            result = y + 1;
+                            y <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        JMP: begin
+                            // need to read two bytes
+                            // ?????????
+                            pc <= memory;
+                        end
+                        JSR: state <= ERROR;
+                        // interrupt
+                        LDA: begin
+                            result = memory;
+                            a <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        LDX:  begin
+                            result = memory;
+                            x <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        LDY:  begin
+                            result = memory;
+                            y <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        LSR: begin
+                            result = memory >> 1;
+                            dout <= result;
+                            addr <= addr_comb;
+                            rw <= 1; // write
+                            state <= REST; 
+                            c <= memory[0];
+                            z <= result == 0;
+                            n <= 1'b0;
+                        end
+                        // accumulator case separately
+                        NOP: pc <= pc + 1;
+                        ORA: begin
+                            result = a | memory; 
+                            a <= result; 
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        PHA: state <= ERROR;
+                        // STACK
+                        PHP: state <= ERROR;
+                        // STACK
+                        PLA: state <= ERROR;
+                        // STACK
+                        PLP: state <= ERROR;
+                        // STACK
+                        ROL: state <= ERROR;
+                        ROR: state <= ERROR;
+                        RTI: state <= ERROR;
+                        // INTERRUPT
+                        RTS: state <= ERROR;
+                        // STACK
+                        SBC: begin
+                            result = a - memory - ~c; 
+                            a <= result;
+                            // c <= ; 
+                            // confused
+                            z <= result == 0;
+                            v <= (result[7:0] ^ a) & (result ^ (~memory)) & 8'b10000000;
+                            n <= result[7]; 
+                        end
+                        SEC: c <= 1'b1;
+                        SED: d <= 1'b1;
+                        SEI: i <= 1'b1;
+                        STA: begin
+                            dout <= a;
+                            addr <= addr_comb;
+                            rw <= 1; // write
+                            state <= REST; 
+                        end
+                        STX: begin
+                            dout <= x;
+                            addr <= addr_comb;
+                            rw <= 1; // write
+                            state <= REST; 
+                        end
+                        STY: begin
+                            dout <= y;
+                            addr <= addr_comb;
+                            rw <= 1; // write
+                            state <= REST; 
+                        end
+                        TAX: begin
+                            result = a;
+                            x <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        TAY: begin
+                            result = a;
+                            y <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        TSX: begin
+                            result = s;
+                            x <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end 
+                        TXA: begin
+                            result = x;
+                            a <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end 
+                        TXS: begin
+                            result = x;
+                            s <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        TYA: begin
+                            result = y;
+                            a <= result;
+                            z <= result == 0;
+                            n <= result[7];
+                        end
+                        UNSUPPORTED_OP: state <= ERROR;
+                        // TODO: combine with regular?
+                        // JMP_ABS: 
+                        // JSR_ABS:
+                        default: begin
+                            instruction_done <= 1; 
+                            error <= 1;
+                        end
+
+                    endcase
+
+                end
             end
-
-            if (state == MEM_VAL_RECEIVED) begin
-                // simulate instruction
-
-                instruction_done <= 0;
-                error <= 0;
-                count <= estimated_cycles;
-
-
-                // maybe update correct number of cycles based on opcode/addressing mode
-
-                // below we store current reguster values, 
-                // possibly override them based on computation (do after memory is ready)
-                case (opcode) 
-                    ADC: begin
-                        result = {1'b0, a} + {1'b0, memory} + c; 
-                        a <= result[7:0];
-                        c <= result[8];
-                        z <= result == 0;
-                        v <= ((result ^ a) & (result ^ memory))[7];
-                        n <= result[7];
-                        
-                    end
-                    AND: begin
-                        result = a & memory;
-                        a <= result[7:0];
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    ASL: begin
-                        result = memory << 1;
-                        // write result[7:0] to memory
-                        c <= memory[7];
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    BCC: begin
-                        if (c == 1'b0) begin
-                            pc <= $signed({0, pc}) + $signed(3'b010) + $signed(memory);
-                        end
-                    end
-                    BCS: begin
-                        if (c == 1'b1) begin
-                            pc <= $signed({0, pc}) + $signed(3'b010) + $signed(memory);
-                        end
-                    end
-                    BEQ: begin
-                        if (z == 1'b1) begin
-                            pc <= $signed({0, pc}) + $signed(3'b010) + $signed(memory);
-                        end
-                    end
-                    BIT: begin
-                        result = a & memory;
-                        z <= result == 0;
-                        v <= result[6];
-                        n <= result[7];
-                    end
-                    BMI: begin
-                        if (n == 1'b1) begin
-                            pc <= $signed({0, pc}) + $signed(3'b010) + $signed(memory);
-                        end
-                    end
-                    BNE: begin
-                        if (z == 1'b0) begin
-                            pc <= $signed({0, pc}) + $signed(3'b010) + $signed(memory);
-                        end
-                    end
-                    BPL: begin
-                        if (n == 1'b0) begin
-                            pc <= $signed({0, pc}) + $signed(3'b010) + $signed(memory);
-                        end
-                    end
-                    BRK: 
-                    // interrupt
-                    BVC: begin
-                        if (v == 1'b0) begin
-                            pc <= $signed({0, pc}) + $signed(3'b010) + $signed(memory);
-                        end
-                    end
-                    BVS: begin
-                        if (v == 1'b1) begin
-                            pc <= $signed({0, pc}) + $signed(3'b010) + $signed(memory);
-                        end
-                    end
-                    CLC: c <= 1'b0;
-                    CLD: d <= 1'b0;
-                    CLI: i <= 1'b0;
-                    CLV: v <= 1'b0;
-                    CMP: begin
-                        result = a - memory; 
-                        c <= a >= memory; 
-                        z <= a == memory;
-                        n <= result[7];
-                    end
-                    CPX: begin
-                        result = x - memory; 
-                        c <= x >= memory; 
-                        z <= x == memory;
-                        n <= result[7];
-                    end
-                    CPY: begin
-                        result = y - memory; 
-                        c <= y >= memory; 
-                        z <= y == memory;
-                        n <= result[7];
-                    end
-                    DEC: begin
-                        result = memory - 1;
-                        // signed or unsigned???
-                        // WRITE RESULT TO MEMORY
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    DEX: begin
-                        result = x - 1;
-                        x <= result[7:0];
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    DEY: begin
-                        result = y - 1;
-                        y <= result[7:0];
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    EOR: begin
-                        result = a ^ memory; 
-                        a <= result[7:0];
-                        z <= result == 0;
-                        n <= result[7];
-                    end 
-                    INC: begin
-                        result = memory + 1;
-                        // WRITE BACK TO MEMORY
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    INX: begin
-                        result = x + 1;
-                        x <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    INY:  begin
-                        result = y + 1;
-                        y <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    JMP: begin
-                        // need to read two bytes
-                        pc <= memory;
-                    end
-                    JSR: 
-                    // interrupt
-                    LDA: begin
-                        result = memory;
-                        a <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    LDX:  begin
-                        result = memory;
-                        x <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    LDY:  begin
-                        result = memory;
-                        y <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    LSR: begin
-                        result = memory >> 1;
-                        // write back to memory
-                        c <= memory[0];
-                        z <= result == 0;
-                        n <= 1'b0;
-                    end
-                    // accumulator case separately
-                    NOP: pc <= pc;
-                    ORA: begin
-                        result = a | memory; 
-                        a <= result; 
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    PHA: 
-                    // STACK
-                    PHP: 
-                    // STACK
-                    PLA: 
-                    // STACK
-                    PLP: 
-                    // STACK
-                    ROL: 
-                    ROR: 
-                    RTI: 
-                    // INTERRUPT
-                    RTS: 
-                    // STACK
-                    SBC: begin
-                        result = a - memory - ~c; 
-                        a <= result;
-                        c <= ; 
-                        // confused
-                        z <= result == 0;
-                        v <= (result[7:0] ^ a) & (result ^ (~memory)) & 8'b10000000;
-                        n <= result[7]; 
-                    end
-                    SEC: c <= 1'b1;
-                    SED: d <= 1'b1;
-                    SEI: i <= 1'b1;
-                    STA: begin
-                        // store A in memory
-                    end
-                    STX: begin
-                        // store X in memory
-                    end
-                    STY: begin
-                        // store Y in memory
-                    end
-                    TAX: begin
-                        result = a;
-                        x <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    TAY: begin
-                        result = a;
-                        y <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    TSX: begin
-                        result = sp;
-                        x <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end 
-                    TXA: begin
-                        result = x;
-                        a <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end 
-                    TXS: begin
-                        result = x;
-                        sp <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    TYA: begin
-                        result = y;
-                        a <= result;
-                        z <= result == 0;
-                        n <= result[7];
-                    end
-                    UNSUPPORTED_OP:
-                    // TODO: combine with regular?
-                    // JMP_ABS: 
-                    // JSR_ABS:
-                    default: begin
-                        instruction_done <= 1; 
-                        error <= 1;
-                    end
-
-                endcase
-
-
-                // write to memory (maybe)
-                dout <= new_val;
-                addr <= ;
-                rw <= 1; // read
-                state <= REST; 
-            end
-
-            // if (state == REST) begin
-            //     // wait some number of cycles before going back to start state
-            //     state <= START; 
-            // end
         end
 
     end
