@@ -79,13 +79,6 @@ async def test_ppu(dut):
 
 
 
-   # I will actually test this later
-   # I just wanted to see that palette was correctly loading w/o asserts
-
-      
-
-
-
 def ppu_runner():
     """PPU Tester."""
     hdl_toplevel_lang = os.getenv("HDL_TOPLEVEL_LANG", "verilog")

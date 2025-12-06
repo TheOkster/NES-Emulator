@@ -23,7 +23,8 @@ module ppu (
         output logic [7:0] patt_table_y,
         output logic [23:0] patt_table_pix,
         output logic patt_table_out_valid,
-        output logic nmi
+        output logic nmi,
+        output logic dma
     );
     logic patt_table_ind;
     logic [7:0] oam_data;
@@ -52,6 +53,7 @@ module ppu (
     assign ppu_status[7:5] = {vblank_flag, sprite_overflow_flag, sprite_0_hit_flag};
     // logic [1:0] force_vblank;
     logic [7:0] oam_addr;
+    logic [7:0] oam_addr_dma; // can use fewer bits
     logic [15:0] ppu_scroll; // [15:8] X, [7:0] Y
     logic [15:0] ppu_addr;
     logic [7:0] ppu_data;
@@ -59,6 +61,7 @@ module ppu (
     logic w; // not working yet
     logic[4:0] cycle;
     logic [4:0] cycles_after;
+    logic is_clock_even = 0;
     logic first_time;
     logic[8:0] dot;
     logic[8:0] scanline = 260; // This is the scanline plus 1 to avoid signed numbers issues, will change name / function
@@ -84,8 +87,24 @@ module ppu (
     logic [1:0] vram_name_table_sel;
     logic [2:0] vram_fine_y;
     logic [15:0] vram_addr;
+
+    logic [7:0] secondary_oam [31:0];
     // assign vram_addr[14:0] = {vram_fine_y, vram_name_table_sel, vram_coarse_y, vram_coarse_x};
 
+    logic dma_even_passed;
+    logic [7:0] dma_addr_high;
+    logic [7:0] dma_addr_low;
+    logic [7:0] dma_to_write;
+    assign oam_addr_dma = dma_addr_low >> 2;
+
+    typedef struct packed {
+        logic [7:0] y;
+        logic [7:0] tile;
+        logic [7:0] att;
+        logic [7:0] x;
+    } oam_elt; // i can't believe i forgot structs were a thing :(
+
+    oam_elt oam[64];  
     initial begin
         //  $readmemh(`FPATH(2C07.mem), sys_palette); // May need to change
         //  $dumpfile("ppu.fst");
@@ -100,10 +119,9 @@ module ppu (
 
     // Gets System Palette
 
-    // Want to create a module but am delaying bc idk where i'll put palette read for now
-    // and bc of the issue of passing unpacked modules btw modules
+
     logic palette_ram_we;
-    logic palette_ram_data_in;
+    logic [7:0] palette_ram_data_in;
     logic [4:0] palette_ram_inp_addr;
     logic [4:0] palette_ram_inp_addr_ac;
     logic [4:0] palette_ram_inp_addr_deb;
@@ -130,14 +148,14 @@ module ppu (
 
 
     // Actual Code
-    logic [9:0] name_table_wr_addr;
+    logic [11:0] name_table_wr_addr;
     logic name_table_we;
     logic [7:0] name_table_in;
     logic [7:0] name_table_out;
     logic [11:0] name_table_re_addr;
     name_table my_nt(.clk(clk), .we(name_table_we),
     .read_addr(name_table_re_addr), .write_addr(name_table_wr_addr),
-    .data_in(name_table_in), .is_mirroring_horiz(1),
+    .data_in(name_table_in), .is_mirroring_horiz(1'b1),
     .rst(0), .data_out(name_table_out));
 
 
@@ -305,6 +323,7 @@ logic patt_table_avail;
             palette_ram_we <= 0;
             cycles_after <= 0;
             w <= 1;
+            is_clock_even <= 0;
         end else begin
             // palette_ram_we <= (cpu_rw == CPU_WRITE && cpu_addr[2:0] == 3'h7 && ppu_addr >= 16'h3F00);
             first_time <= 0;
@@ -313,6 +332,7 @@ logic patt_table_avail;
             // TODO Add Test Cases for timing
             // verify there are no off by one errors
             if(ppu_clk_trig) begin
+                is_clock_even <= ~is_clock_even;
                 if(dot >= 340) begin
                     dot <= 0;
                     scanline <= (scanline == 261) ? 0 : scanline + 1;
@@ -443,7 +463,7 @@ logic patt_table_avail;
                     end
                     3'h1: ppu_mask <= cpu_dout;
                     3'h3: oam_addr <= cpu_dout;
-                    3'h4: oam_data <= cpu_dout;
+                    3'h4: oam[oam_addr] <= cpu_dout;
                     3'h5: begin 
                         // for now
                         if(ppu_clk_trig) begin
@@ -510,7 +530,7 @@ logic patt_table_avail;
                         w <= 0; 
                         vblank_flag <= 0;
                     end
-                    16'h2004: cpu_din <= oam_data;
+                    16'h2004: cpu_din <= oam[oam_addr];
                     16'h2007: begin 
                         if(ppu_addr <= 16'h1FFF) begin
                             // Regular Case
@@ -536,8 +556,38 @@ logic patt_table_avail;
             end     
         end   
             /* */
+
     end
-    
+    //  always_ff @(posedge ppu_clk_trig) begin
+    //         if(cpu_addr == 16'h4014 && cpu_rw == CPU_WRITE && !dma) begin
+    //             dma_addr_high <= cpu_din;
+    //             dma_addr_low <= 0;
+    //             dma <= 1;
+    //         end
+    //         if(dma) begin
+    //             if(dma_even_passed) begin
+    //                 if(is_clock_even) begin
+    //                     // dma_to_write <= // read {dma_addr_high, dma_addr_low};
+    //                 end else begin
+    //                     dma_addr_low <= dma_addr_low + 1;
+    //                     if(dma_addr_low == 255) begin
+    //                         dma <= 0;
+    //                         dma_even_passed <= 0;
+    //                     end
+    //                     case (dma_addr_low[1:0])
+    //                         0: oam[oam_addr_dma].y <= dma_to_write;
+    //                         1: oam[oam_addr_dma].tile <= dma_to_write;
+    //                         2: oam[oam_addr_dma].att <= dma_to_write;
+    //                         3: oam[oam_addr_dma].x <= dma_to_write;
+    //                     endcase
+    //                 end
+    //             end else begin
+    //                 if(is_clock_even) begin
+    //                     dma_even_passed <= 1;
+    //                 end
+    //             end
+    //         end
+    //     end
 endmodule
     
     

@@ -1,5 +1,13 @@
     
     
+`timescale 1ns / 1ps
+`default_nettype none
+`ifdef SYNTHESIS
+`define FPATH(X) `"X`"
+`else /* ! SYNTHESIS */
+`define FPATH(X) `"../data/X`"
+`endif  /* ! SYNTHESIS */
+
 module name_table ( 
    input wire clk,
    input wire we,
