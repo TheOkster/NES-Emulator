@@ -60,11 +60,11 @@ module top_level(
     logic cpu_rw;
 
 
-    logic [1:0] counter_4 = 0;      // 2-bit counter for 4 cycles
-    logic [3:0] counter_12 = 0;     // 4-bit counter for 12 cycles
+    logic [1:0] counter_4 = 0;   
+    logic [3:0] counter_12 = 0; 
 
-    logic event_1_in_4;
-    logic event_1_in_12;
+    logic cpu_nes_trig;
+    logic ppu_nes_trig;
 
     always_ff @(posedge clk_nes) begin
         counter_4 <= counter_4 + 1;
@@ -74,23 +74,22 @@ module top_level(
             counter_12 <= counter_12 + 1;
     end
 
-    assign event_1_in_4  = (counter_4 == 3); 
-    assign event_1_in_12 = (counter_12 == 11);
+    assign ppu_nes_trig  = (counter_4 == 3); 
+    assign cpu_nes_trig = (counter_12 == 11);
 
-
-    logic event_4_sync_0, event_4_sync_1;
-    logic event_12_sync_0, event_12_sync_1;
+    // clock domain
+    logic cpu_sync0_trig, cpu_sync1_trig;
+    logic ppu_sync0_trig, ppu_sync1_trig;
 
     always_ff @(posedge clk_100_passthrough) begin
-        event_4_sync_0 <= event_1_in_4;
-        event_4_sync_1 <= event_4_sync_0;
-
-        event_12_sync_0 <= event_1_in_12;
-        event_12_sync_1 <= event_12_sync_0;
+        cpu_sync0_trig <= cpu_nes_trig;
+        cpu_sync1_trig <= cpu_sync0_trig;
+        ppu_sync0_trig <= ppu_nes_trig;
+        ppu_sync1_trig <= ppu_sync0_trig;
     end
     logic ppu_clk_trig, cpu_clk_trig;
-    assign ppu_clk_trig = event_4_sync_0  & ~event_4_sync_1;
-    assign cpu_clk_trig = event_12_sync_0 & ~event_12_sync_1;
+assign cpu_clk_trig = cpu_sync0_trig & ~cpu_sync1_trig;
+assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig;
 
 
     cpu my_cpu(
@@ -132,23 +131,35 @@ module top_level(
 
     logic [7:0] cart_cpu_din;
     logic cart_cpu_din_valid;
-    // cartridge my_cartridge (
-    //     .clk(clk),
-    //     .rst(rst),
-    //     .cpu_dout(cpu_dout),
-    //     .cpu_addr(cpu_addr),
-    //     .cpu_din(cart_cpu_din),
-    //     .cpu_din_valid(cart_cpu_din_valid),
-    //     .ppu_rw(ppu_rw),
-    //     .ppu_dout(ppu_dout),
-    //     .ppu_addr(ppu_addr),
-    //     .ppu_din(ppu_din),
-    //     .ppu_din_valid(ppu_din_valid),
-    //     .ppu_rw(ppu_rw)
-    // );
 
+    cartridge my_cartridge (
+        .clk(clk_100_passthrough),
+        .rst(sys_rst),
+        .cpu_dout(cpu_dout),
+        .cpu_addr(cpu_addr),
+        .cpu_din(cart_cpu_din),
+        .cpu_din_valid(cart_cpu_din_valid),
+        .cpu_rw(cpu_rw),
+        .ppu_dout(0), //TODO: change
+        .ppu_addr(0), //TODO: change
+        .ppu_din(0), //TODO: change
+        .ppu_din_valid(0), //TODO: change
+        .ppu_rw(0) //TODO: change
+    );
+    logic [7:0] cpu_mem_cpu_din;
+    logic cpu_mem_cpu_din_valid;
+
+    cpu_mem cpu_mem_man(
+        .clk(clk_100_passthrough),
+        .rst(sys_rst),
+        .cpu_dout(cpu_dout),
+        .cpu_addr(cpu_addr),
+        .cpu_din(cpu_mem_cpu_din),
+        .cpu_din_valid(cpu_mem_cpu_din_valid),
+        .cpu_rw(cpu_rw)
+    );
     assign cpu_din_valid = cart_cpu_din_valid || ppu_cpu_din_valid;
-    assign cpu_din = 
+    assign cpu_din = cpu_mem_cpu_din_valid ? cpu_mem_cpu_din :
         cart_cpu_din_valid ? cart_cpu_din : 
         ppu_cpu_din_valid ? ppu_cpu_din : 
         0;
@@ -206,8 +217,7 @@ module top_level(
         .doutb(frame_buff_raw)
     );
     // 
-    logic [23:0] frame_buff_raw; //data out of frame buffer (565)
-    // assign frame_buff_raw = 24'hFF33FF;
+    logic [23:0] frame_buff_raw; //data out of frame buffer (8-8-8)
     logic [FB_SIZE-1:0] addrb; //used to lookup address in memory for reading from buffer
     logic good_addrb; //used to indicate within valid frame for scaling
     logic good_addrb_bufs [1:0]; //used to indicate within valid frame for scaling

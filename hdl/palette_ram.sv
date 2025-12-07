@@ -79,7 +79,6 @@ palette_ram[31] = 8'h38;
         endcase
     end
     always_ff @(posedge clk) begin
-        // For debugging purposes am temporarily doing this
         // if (we) palette_ram[actual_addr] <= data_in;
     end
 

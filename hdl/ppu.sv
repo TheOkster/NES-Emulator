@@ -47,7 +47,7 @@ module ppu (
     assign sprite_size = ppu_ctrl[5];
     logic [1:0] nametable_addr_switch; // bad name
     assign nametable_addr_switch = ppu_ctrl[1:0];
-    localparam CPU_WRITE = 0; // opposite of what you might think
+    localparam CPU_WRITE = 1;
     logic vblank_flag;
     logic sprite_overflow_flag;
     logic sprite_0_hit_flag;

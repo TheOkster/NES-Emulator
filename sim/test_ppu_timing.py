@@ -34,13 +34,13 @@ async def test_ppu(dut):
       await ClockCycles(dut.clk, 18)
    for _ in range(1*1):
       dut.cpu_dout.value = 0xA
-      dut.cpu_rw.value = 0
+      dut.cpu_rw.value = 1
       dut.cpu_addr.value = 0x2001
       dut.ppu_clk_trig.value = 1
       await ClockCycles(dut.clk, 1)
       dut.ppu_clk_trig.value = 0
       await ClockCycles(dut.clk, 18)
-      dut.cpu_rw.value = 1
+      dut.cpu_rw.value = 0
    for _ in range(1*340):
       dut.ppu_clk_trig.value = 1
       await ClockCycles(dut.clk, 1)
