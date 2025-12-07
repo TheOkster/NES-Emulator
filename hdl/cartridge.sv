@@ -9,17 +9,17 @@ module cartridge (
         input wire clk,
         input wire rst,
 
-        input logic [7:0] cpu_dout,
-        input logic [15:0] cpu_addr,
-        output wire [7:0] cpu_din,
-        output logic cpu_din_valid;
-        input logic cpu_rw,
+        input wire [7:0] cpu_dout,
+        input wire [15:0] cpu_addr,
+        output logic [7:0] cpu_din,
+        output logic cpu_din_valid,
+        input wire cpu_rw,
     
-        input logic [7:0] ppu_dout,
-        input logic [13:0] ppu_addr,
-        output wire [7:0] ppu_din,
+        input wire [7:0] ppu_dout,
+        input wire [13:0] ppu_addr,
+        output logic [7:0] ppu_din,
         output logic ppu_din_valid,
-        input logic ppu_rw,
+        input wire ppu_rw
     );
 
     mapper0 mapper (
@@ -29,7 +29,7 @@ module cartridge (
         .cpu_addr(cpu_addr),
         .cpu_din(cpu_din),
         .cpu_din_valid(cpu_din_valid),
-        .ppu_rw(ppu_rw),
+        .cpu_rw(cpu_rw),
         .ppu_dout(ppu_dout),
         .ppu_addr(ppu_addr),
         .ppu_din(ppu_din),
@@ -42,31 +42,31 @@ module mapper0 (
         input wire clk,
         input wire rst,
 
-        input logic [7:0] cpu_dout,
-        input logic [15:0] cpu_addr,
-        input logic cpu_rw,
+        input wire [7:0] cpu_dout,
+        input wire [15:0] cpu_addr,
     
-        input logic [7:0] ppu_dout,
-        input logic [13:0] ppu_addr,
-        input logic cpu_rw,
+        input wire [7:0] ppu_dout,
+        input wire [13:0] ppu_addr,
+        input wire ppu_rw,
 
         output logic [7:0] cpu_din,
         output logic cpu_din_valid,
+        input wire cpu_rw,
 
         output logic [7:0] ppu_din,
         output logic ppu_din_valid
-)
+);
     logic [15:0] cpu_mapped_addr;
     logic [13:0] ppu_mapped_addr;
 
     always_comb begin
-        if (cpu_addr < 16'h8000) {
+        if (cpu_addr < 16'h8000) begin
             cpu_mapped_addr = 0;
             cpu_din_valid = 0;
-        } else {
+        end else begin
             cpu_mapped_addr = (cpu_addr - 16'h8000) & 16'h8000;
             cpu_din_valid = 1;
-        }
+        end
     end
 
     always_comb begin

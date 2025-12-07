@@ -456,103 +456,103 @@ logic patt_table_avail;
             end
 
             if(16'h2000 <= cpu_addr && cpu_addr <= 16'h3FFF) begin
-            if(cpu_rw == CPU_WRITE) begin
-                // 16'h4014: oam_dma <= cpu_dout; -> needs to be in separate if statements
-                case (cpu_addr[2:0]) 
-                    3'h0: begin 
-                        ppu_ctrl <= cpu_dout;
-                        temp_vram_name_table_sel <= nametable_sel;
-                    end
-                    3'h1: ppu_mask <= cpu_dout;
-                    3'h3: oam_addr <= cpu_dout;
-                    3'h4: oam[oam_addr] <= cpu_dout;
-                    3'h5: begin 
-                        // for now
-                        if(ppu_clk_trig) begin
-                            if(w) begin
-                                fine_x <= cpu_dout[2:0];
-                                temp_vram_coarse_x <= cpu_dout[7:3];
-                                // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w; // need to change when have actual clocks
-                                // w <= 
-                            end else begin
-                                // pgpu_scroll[7:0] <= cpu_dout;
-                                // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
-                                temp_vram_fine_y <= cpu_dout[2:0];
-                                temp_vram_coarse_y <= cpu_dout[7:3];
-                            end
-                            w <= ~w;
+                if(cpu_rw == CPU_WRITE) begin
+                    // 16'h4014: oam_dma <= cpu_dout; -> needs to be in separate if statements
+                    case (cpu_addr[2:0]) 
+                        3'h0: begin 
+                            ppu_ctrl <= cpu_dout;
+                            temp_vram_name_table_sel <= nametable_sel;
                         end
-                        w <= (ppu_clk_trig) ? ~w : w;
-                    end // handle later
-                    3'h6: begin 
-                        if(ppu_clk_trig) begin
-                            if(w) begin
-                                // temp_vram_addr[7:0] <= cpu_dout;
-                                temp_vram_coarse_x <= cpu_dout[4:0];
-                                temp_vram_coarse_y[2:0] <= cpu_dout[7:5];
-                                vram_addr <= {temp_vram_addr[15:8], cpu_dout};
+                        3'h1: ppu_mask <= cpu_dout;
+                        3'h3: oam_addr <= cpu_dout;
+                        3'h4: oam[oam_addr] <= cpu_dout;
+                        3'h5: begin 
+                            // for now
+                            if(ppu_clk_trig) begin
+                                if(w) begin
+                                    fine_x <= cpu_dout[2:0];
+                                    temp_vram_coarse_x <= cpu_dout[7:3];
+                                    // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w; // need to change when have actual clocks
+                                    // w <= 
+                                end else begin
+                                    // pgpu_scroll[7:0] <= cpu_dout;
+                                    // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
+                                    temp_vram_fine_y <= cpu_dout[2:0];
+                                    temp_vram_coarse_y <= cpu_dout[7:3];
+                                end
+                                w <= ~w;
+                            end
+                            w <= (ppu_clk_trig) ? ~w : w;
+                        end // handle later
+                        3'h6: begin 
+                            if(ppu_clk_trig) begin
+                                if(w) begin
+                                    // temp_vram_addr[7:0] <= cpu_dout;
+                                    temp_vram_coarse_x <= cpu_dout[4:0];
+                                    temp_vram_coarse_y[2:0] <= cpu_dout[7:5];
+                                    vram_addr <= {temp_vram_addr[15:8], cpu_dout};
 
-                                // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w;
-                            end else begin
-                                // temp_vram_addr[15:8] <= cpu_dout;
-                                temp_vram_fine_y <= cpu_dout[6:4];
-                                temp_vram_name_table_sel <= cpu_dout[3:2];
-                                temp_vram_coarse_y[4:3] <= cpu_dout[1:0];
-                                // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
+                                    // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w;
+                                end else begin
+                                    // temp_vram_addr[15:8] <= cpu_dout;
+                                    temp_vram_fine_y <= cpu_dout[6:4];
+                                    temp_vram_name_table_sel <= cpu_dout[3:2];
+                                    temp_vram_coarse_y[4:3] <= cpu_dout[1:0];
+                                    // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
+                                end
+                                w <= ~w;
                             end
-                            w <= ~w;
+                        end // handle later
+                        3'h7: begin
+                                if(vram_addr <= 16'h1FFF) begin
+                                // Regular Case
+                                // TODO: Implement
+                                patt_table_we_en <= ppu_clk_trig;
+                                patt_table_wr_addr <= vram_addr;
+                                patt_table_inp <= ppu_data;
+                                end else if (vram_addr > 16'h1FFF && vram_addr < 16'h3F00) begin
+                                    name_table_wr_addr <= vram_addr; 
+                                    name_table_we <= ppu_clk_trig;
+                                    name_table_in <= ppu_data;
+                                end else if (vram_addr >= 16'h3F00 && vram_addr <= 16'h3FFF) begin
+                                // we is on for one cycle
+                                palette_ram_we <= ppu_clk_trig;
+
+                                palette_ram_wri_addr <= vram_addr;
+                                palette_ram_data_in <= ppu_data;
+
+                                end
+                                if(ppu_clk_trig) vram_addr <= vram_inc ? vram_addr + 32 : vram_addr + 1;
+                            end
+                    endcase
+                end else begin
+                    case (cpu_addr[2:0])
+                        3'h2: begin 
+                            cpu_din <= {ppu_status[7:5], ppu_data_buffer[4:0]};
+                            w <= 0; 
+                            vblank_flag <= 0;
                         end
-                    end // handle later
-                    3'h7: begin
+                        3'h4: cpu_din <= oam[oam_addr];
+                        3'h7: begin 
                             if(vram_addr <= 16'h1FFF) begin
-                            // Regular Case
-                            // TODO: Implement
-                            patt_table_we_en <= ppu_clk_trig;
-                            patt_table_wr_addr <= vram_addr;
-                            patt_table_inp <= ppu_data;
+                                if (ppu_clk_trig) patt_table_re_addr <= vram_addr;
+                                if (cycles_after == 2) ppu_data_buffer <= patt_table_out;
+                                if(ppu_clk_trig) cpu_din <= ppu_data_buffer;
                             end else if (vram_addr > 16'h1FFF && vram_addr < 16'h3F00) begin
-                                name_table_wr_addr <= vram_addr; 
-                                name_table_we <= ppu_clk_trig;
-                                name_table_in <= ppu_data;
-                            end else if (vram_addr >= 16'h3F00 && vram_addr <= 16'h3FFF) begin
-                            // we is on for one cycle
-                            palette_ram_we <= ppu_clk_trig;
+                                name_table_re_addr <= vram_addr; 
+                                if(cycles_after == 2) ppu_data <= name_table_out;
+                            end else if(vram_addr >= 16'h3F00 && vram_addr <= 16'h3FF) begin
+                                if(ppu_clk_trig) palette_ram_inp_addr <= vram_addr[4:0];
 
-                            palette_ram_wri_addr <= vram_addr;
-                            palette_ram_data_in <= ppu_data;
-
+                                // will only take effect one cycle after trigger but eh that's fine
+                                if(cycles_after == 2) begin
+                                    ppu_data <= palette_ram_output;
+                                    ppu_data_buffer <=  palette_ram_output;
+                                end
                             end
                             if(ppu_clk_trig) vram_addr <= vram_inc ? vram_addr + 32 : vram_addr + 1;
                         end
-                endcase
-            end else begin
-                case (cpu_addr[2:0])
-                    3'h2: begin 
-                        cpu_din <= {ppu_status[7:5], ppu_data_buffer[4:0]};
-                        w <= 0; 
-                        vblank_flag <= 0;
-                    end
-                    3'h4: cpu_din <= oam[oam_addr];
-                    3'h7: begin 
-                        if(vram_addr <= 16'h1FFF) begin
-                            if (ppu_clk_trig) patt_table_re_addr <= vram_addr;
-                            if (cycles_after == 2) ppu_data_buffer <= patt_table_out;
-                            if(ppu_clk_trig) cpu_din <= ppu_data_buffer;
-                        end else if (vram_addr > 16'h1FFF && vram_addr < 16'h3F00) begin
-                            name_table_re_addr <= vram_addr; 
-                            if(cycles_after == 2) ppu_data <= name_table_out;
-                        end else if(vram_addr >= 16'h3F00 && vram_addr <= 16'h3FF) begin
-                            if(ppu_clk_trig) palette_ram_inp_addr <= vram_addr[4:0];
-
-                            // will only take effect one cycle after trigger but eh that's fine
-                            if(cycles_after == 2) begin
-                                ppu_data <= palette_ram_output;
-                                ppu_data_buffer <=  palette_ram_output;
-                            end
-                        end
-                        if(ppu_clk_trig) vram_addr <= vram_inc ? vram_addr + 32 : vram_addr + 1;
-                    end
-                endcase
+                    endcase
             end     
 
             cpu_din_valid <= ((cpu_addr[2:0] == 2 || cpu_addr[2:0] == 4 || ( cpu_addr[2:0] == 7 && vram_addr <= 16'h1FFF)) & cpu_rw != CPU_WRITE);
@@ -569,7 +569,7 @@ logic patt_table_avail;
 
             //     end
             // end
-        end   
+            end   
         end
             /* Verify later */
     end
