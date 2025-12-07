@@ -615,6 +615,7 @@ module cpu (
             mem_requests_done <= mem_requests_done + 1;
             if (mem_requests_needed == 1) begin
                 memory <= din;
+                addr <= addr_comb + 1; 
                 if (((mem_requests_done == 0) && (opcode != JMP)
                     || 
                     (mem_requests_done == 1) && (opcode == JMP)

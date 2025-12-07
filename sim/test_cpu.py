@@ -32,28 +32,26 @@ async def test_cpu(dut):
    dut.rst.value = 1
    await ClockCycles(dut.clk_slow, 1)
    dut.rst.value = 0
-   for i in range(1000):
+   for i in range(500):
         await FallingEdge(dut.clk_fast)
 
         addr = dut.addr.value 
         if (addr != 0):
-            print("addr: ", addr)
             if not (int(addr) in mem):
                 mem_val = 0
-                print("invaild address")
+                print("invaild address: ", addr)
                 # break
             else: 
                 mem_val = mem[int(addr)]
             dut.din.value = mem_val
             dut.din_valid.value = 1
-            if (dut.rw):
+            
+            if (int(dut.rw.value) != 0):
                 mem[int(addr)] = dut.dout.value
             
         await RisingEdge(dut.clk_fast)
 
    await ClockCycles(dut.clk_fast, 5)
-   # I will actually test this later
-   # I just wanted to see that palette was correctly loading w/o asserts
 
       
 
