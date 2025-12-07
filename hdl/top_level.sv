@@ -58,7 +58,8 @@ module top_level(
     logic cpu_rw;
 
     cpu my_cpu(
-        .clk(clk_nes),
+        .clk_slow(clk_nes),
+        .clk_fast(clk_100_passthrough),
         .rst(sys_rst),
 
         .dout(cpu_dout),
@@ -68,23 +69,23 @@ module top_level(
         .rw(cpu_rw),
 
         .irq(),
-        .nmi(),
+        .nmi(nmi),
 
         .audio_out()
     )
 
     logic [7:0] ppu_cpu_din;
     logic ppu_cpu_din_valid;
-
+    logic nmi;
     ppu my_ppu(
         .clk(clk_100_passthrough),
-        .rst(),
+        .rst(sys_rst),
         .cpu_dout(cpu_dout),
         .cpu_addr(cpu_addr),
         .cpu_din(ppu_cpu_din),
         .cpu_din_valid(ppu_cpu_din_valid),
         .pixel(pixel_out),
-        .cpu_rw(),
+        .cpu_rw(cpu_rw),
         .is_cart_vertical(1),
         .ppu_clk_trig(ppu_clk_trig),
         .patt_table_x(patt_table_x),

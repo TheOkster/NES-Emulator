@@ -106,6 +106,7 @@ module ppu (
     } oam_elt; // i can't believe i forgot structs were a thing :(
 
     oam_elt oam[64];  
+    oam_elt current_sprite_line[8];
     initial begin
         //  $readmemh(`FPATH(2C07.mem), sys_palette); // May need to change
         //  $dumpfile("ppu.fst");
@@ -333,6 +334,7 @@ logic patt_table_avail;
              // rename
             // TODO Add Test Cases for timing
             // verify there are no off by one errors
+            // BACKGROUND rendering
             if(ppu_clk_trig) begin
                 is_clock_even <= ~is_clock_even;
                 if(dot >= 340) begin
@@ -452,10 +454,8 @@ logic patt_table_avail;
                     end            
                 end
             end
-        end
 
-            /* Verify later */
-        if(16'h2000 <= cpu_addr && cpu_addr <= 16'h3FFF) begin
+            if(16'h2000 <= cpu_addr && cpu_addr <= 16'h3FFF) begin
             if(cpu_rw == CPU_WRITE) begin
                 // 16'h4014: oam_dma <= cpu_dout; -> needs to be in separate if statements
                 case (cpu_addr[2:0]) 
@@ -522,28 +522,26 @@ logic patt_table_avail;
                             palette_ram_data_in <= ppu_data;
 
                             end
-                            if(ppu_clk_trig) ppu_addr <= vram_inc ? vram_addr + 32 : vram_addr + 1;
+                            if(ppu_clk_trig) vram_addr <= vram_inc ? vram_addr + 32 : vram_addr + 1;
                         end
                 endcase
             end else begin
-                case (cpu_addr)
-                    16'h2002: begin 
+                case (cpu_addr[2:0])
+                    3'h2: begin 
                         cpu_din <= {ppu_status[7:5], ppu_data_buffer[4:0]};
                         w <= 0; 
                         vblank_flag <= 0;
                     end
-                    16'h2004: cpu_din <= oam[oam_addr];
-                    16'h2007: begin 
-                        if(ppu_addr <= 16'h1FFF) begin
-                            // Regular Case
-                            // TODO: Implement
+                    3'h4: cpu_din <= oam[oam_addr];
+                    3'h7: begin 
+                        if(vram_addr <= 16'h1FFF) begin
                             if (ppu_clk_trig) patt_table_re_addr <= vram_addr;
                             if (cycles_after == 2) ppu_data_buffer <= patt_table_out;
                             if(ppu_clk_trig) cpu_din <= ppu_data_buffer;
                         end else if (vram_addr > 16'h1FFF && vram_addr < 16'h3F00) begin
                             name_table_re_addr <= vram_addr; 
                             if(cycles_after == 2) ppu_data <= name_table_out;
-                        end else if(ppu_addr >= 16'h3F00 && ppu_addr <= 16'h3FF) begin
+                        end else if(vram_addr >= 16'h3F00 && vram_addr <= 16'h3FF) begin
                             if(ppu_clk_trig) palette_ram_inp_addr <= vram_addr[4:0];
 
                             // will only take effect one cycle after trigger but eh that's fine
@@ -556,10 +554,42 @@ logic patt_table_avail;
                     end
                 endcase
             end     
-        end   
-            /* */
 
+            cpu_din_valid <= ((cpu_addr[2:0] == 2 || cpu_addr[2:0] == 4 || ( cpu_addr[2:0] == 7 && vram_addr <= 16'h1FFF)) & cpu_rw != CPU_WRITE);
+            // FOREGROUND rendering 
+            // TODO: Properly integrate this
+
+            // if(!ppu_clk_trig) begin
+            //     if(dot == 1 && scanline != 261) begin
+            //         for(int i = 0; i < 8; i++) begin
+            //             current_sprite_line[i] <= 32'hFFFFFFFF;
+            //         end
+            //     end
+            //     if(dot == 257) begin
+
+            //     end
+            // end
+        end   
+        end
+            /* Verify later */
     end
+    // logic [3:0] sprite_count;
+    // always_comb begin
+    //     sprite_count = 0;
+    //     for (i = 0; i < 64; i++) begin
+    //         if (sprite_count < 4'd9) begin
+    //             if (scanline >= oam[i].y && 
+    //                 scanline < oam[i].y + (sprite_size ? 10'sd16 : 10'sd8)) begin 
+    //                 if (sprite_count < 4'd8) begin
+    //                     spriteScanline[sprite_count] = oam[i];
+    //                 end
+    //                 sprite_count = sprite_count + 4'd1;
+    //             end
+    //         end
+    //     end
+    //     sprite_overflow_flag = (sprite_count > 4'd8);
+
+    // end
     //  always_ff @(posedge ppu_clk_trig) begin
     //         if(cpu_addr == 16'h4014 && cpu_rw == CPU_WRITE && !dma) begin
     //             dma_addr_high <= cpu_din;
