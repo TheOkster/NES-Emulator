@@ -226,6 +226,7 @@ module ppu (
 
 logic patt_table_avail;
     assign patt_table_avail = ~loading_stage & cycles_after > 4 & !ppu_clk_trig;
+    assign patt_table_out_valid = patt_table_avail & !first_time;
     assign patt_table_x =  patt_table_ind*128 + tile_col*8 + rel_col;
     assign patt_table_y = tile_row*8 + rel_row;
     assign patt_table_pix = palette_ram_output;
@@ -245,7 +246,7 @@ logic patt_table_avail;
             // patt_table_pix <= 0;
         end else begin
             if(patt_table_avail & !first_time) begin
-                patt_table_out_valid <= 1;
+                // patt_table_out_valid <= 1;
                 rel_col <= (rel_col == 7) ? 0 :rel_col + 1;
                 if(rel_col == 7) begin
                     rel_row <= (rel_row == 7) ? 0 :rel_row + 1;
@@ -259,7 +260,7 @@ logic patt_table_avail;
                     end 
                 end
             end else begin
-                patt_table_out_valid <= 0;
+                // patt_table_out_valid <= 0;
                 if(loading_stage & !first_time & (loading_stage_cycle != 0 | cycles_after == 4)) begin
                     loading_stage_cycle <= (loading_stage_cycle == 4) ? 0 : loading_stage_cycle + 1;
                     if(loading_stage_cycle == 0) begin
