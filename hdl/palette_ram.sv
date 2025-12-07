@@ -11,6 +11,7 @@ module palette_ram
 (
     input  wire        clk,
     input  wire        we,
+    input  wire [4:0]  wri_addr,
     input  wire [4:0]  inp_addr,
     input  wire [7:0]  din,
     output logic [23:0]  dout
@@ -62,11 +63,11 @@ palette_ram[29] = 8'h18;
 palette_ram[30] = 8'h28;
 palette_ram[31] = 8'h38;
 
-         $dumpfile("palette_ram.fst");
-         for (int i = 0; i < 64; i = i + 1)
-             $dumpvars(0, sys_palette[i]);
-        for (int i = 0; i < 31; i = i + 1)
-             $dumpvars(0, palette_ram[i]);
+        //  $dumpfile("palette_ram.fst");
+        //  for (int i = 0; i < 64; i = i + 1)
+        //      $dumpvars(0, sys_palette[i]);
+        // for (int i = 0; i < 31; i = i + 1)
+        //      $dumpvars(0, palette_ram[i]);
     end
     always_comb begin
         case (inp_addr)

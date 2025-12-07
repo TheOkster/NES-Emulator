@@ -29,6 +29,8 @@ module top_level(
     logic clk_100_passthrough;
     logic clk_pixel;
     logic          clk_5x;
+    logic sys_rst;
+    assign sys_rst = btn[0];
 
     cw_hdmi_clk_wiz wizard_hdmi(
         .sysclk(clk_100_passthrough),
@@ -36,22 +38,121 @@ module top_level(
         .clk_tmds(clk_5x),
         .reset(0)
     );
+
+    logic clk_nes;
+    nes_clk_wiz wizard_nes(
+        .clk_100mhz(clk_100_passthrough),
+        .clk_nes(clk_nes),
+        .reset(sys_rst),
+        .locked(0)
+    );
+
+
+
     logic clk_100mhz_ibuff;
     IBUF clk_ibuf (.I(clk_100mhz), .O(clk_100mhz_ibuff));
     BUFG clk_bufg (.I(clk_100mhz_ibuff), .O(clk_100_passthrough));
+
+    logic [15:0] cpu_addr;
+    logic [7:0] cpu_dout;
+    logic [7:0] cpu_din;
+    logic cpu_din_valid;
+    logic cpu_rw;
+
+
+    logic [1:0] counter_4 = 0;      // 2-bit counter for 4 cycles
+    logic [3:0] counter_12 = 0;     // 4-bit counter for 12 cycles
+
+    logic event_1_in_4;
+    logic event_1_in_12;
+
+    always_ff @(posedge clk_nes) begin
+        counter_4 <= counter_4 + 1;
+        if (counter_12 == 11)
+            counter_12 <= 0;
+        else
+            counter_12 <= counter_12 + 1;
+    end
+
+    assign event_1_in_4  = (counter_4 == 3); 
+    assign event_1_in_12 = (counter_12 == 11);
+
+
+    logic event_4_sync_0, event_4_sync_1;
+    logic event_12_sync_0, event_12_sync_1;
+
+    always_ff @(posedge clk_100_passthrough) begin
+        event_4_sync_0 <= event_1_in_4;
+        event_4_sync_1 <= event_4_sync_0;
+
+        event_12_sync_0 <= event_1_in_12;
+        event_12_sync_1 <= event_12_sync_0;
+    end
+    logic ppu_clk_trig, cpu_clk_trig;
+    assign ppu_clk_trig = event_4_sync_0  & ~event_4_sync_1;
+    assign cpu_clk_trig = event_12_sync_0 & ~event_12_sync_1;
+
+
+    cpu my_cpu(
+        .clk_slow(cpu_clk_trig),
+        .clk_fast(clk_100_passthrough),
+        .rst(sys_rst),
+
+        .dout(cpu_dout),
+        .addr(cpu_addr),
+        .din(cpu_din),
+        .din_valid(cpu_din_valid),
+        .rw(cpu_rw),
+
+        .irq(),
+        .nmi(nmi),
+
+        .audio_out()
+    );
+
+    logic [7:0] ppu_cpu_din;
+    logic ppu_cpu_din_valid;
+    logic nmi;
     ppu my_ppu(
         .clk(clk_100_passthrough),
-        .rst(),
-        .cpu_dout(),
-        .cpu_addr(),
-        .cpu_din(),
+        .rst(sys_rst),
+        .cpu_dout(cpu_dout),
+        .cpu_addr(cpu_addr),
+        .cpu_din(ppu_cpu_din),
+        .cpu_din_valid(ppu_cpu_din_valid),
         .pixel(pixel_out),
-        .cpu_rw(),
+        .cpu_rw(cpu_rw),
+        .is_cart_vertical(1),
+        .ppu_clk_trig(ppu_clk_trig),
         .patt_table_x(patt_table_x),
         .patt_table_y(patt_table_y),
         .patt_table_pix(patt_table_pix),
         .patt_table_out_valid(patt_table_out_valid)
     );
+
+    logic [7:0] cart_cpu_din;
+    logic cart_cpu_din_valid;
+    // cartridge my_cartridge (
+    //     .clk(clk),
+    //     .rst(rst),
+    //     .cpu_dout(cpu_dout),
+    //     .cpu_addr(cpu_addr),
+    //     .cpu_din(cart_cpu_din),
+    //     .cpu_din_valid(cart_cpu_din_valid),
+    //     .ppu_rw(ppu_rw),
+    //     .ppu_dout(ppu_dout),
+    //     .ppu_addr(ppu_addr),
+    //     .ppu_din(ppu_din),
+    //     .ppu_din_valid(ppu_din_valid),
+    //     .ppu_rw(ppu_rw)
+    // );
+
+    assign cpu_din_valid = cart_cpu_din_valid || ppu_cpu_din_valid;
+    assign cpu_din = 
+        cart_cpu_din_valid ? cart_cpu_din : 
+        ppu_cpu_din_valid ? ppu_cpu_din : 
+        0;
+
     logic [16:0] write_addr;
     assign write_addr = 256*patt_table_y+patt_table_x;
 
