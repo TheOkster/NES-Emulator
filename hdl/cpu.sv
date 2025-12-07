@@ -30,7 +30,8 @@ module cpu (
         logic n; 
         logic b; 
         logic instruction_done;
-        logic error;
+        logic error1;
+        logic error2;
         logic [8:0] result; // intermediate computation result 
         // - extra bit for signed arithmetic/carry bit
 
@@ -45,7 +46,9 @@ module cpu (
         IMMEDIATE, 
         ZERO_PAGE, 
         ABSOLUTE,
+        INDIRECT,
         TODO,
+        IMPLIED0,
         UNSUPPORTED_AM
     } addressing_mode_types; 
     // D = Zero page
@@ -61,7 +64,8 @@ module cpu (
         BIT, 
         BMI, 
         BNE, 
-        BPL, 
+        BPL,
+
         BRK, 
         BVC, 
         BVS, 
@@ -72,6 +76,7 @@ module cpu (
         CMP,
         CPX,
         CPY, 
+
         DEC, 
         DEX, 
         DEY, 
@@ -80,6 +85,7 @@ module cpu (
         INX, 
         INY, 
         JMP, 
+
         JSR, 
         LDA, 
         LDX, 
@@ -115,6 +121,7 @@ module cpu (
     } opcode_types;
 
     typedef enum {
+        START,
        REQUESTED_INSTRUCTION, 
        INSTRUCTION_RECEIVED, 
        REQUESTED_MEM,
@@ -172,8 +179,8 @@ module cpu (
             2'b00: begin
                 case(aaa) 
                     3'b001: opcode = BIT;
-                    3'b010: opcode = JMP;
-                    3'b011: opcode = JMP_ABS; 
+                    3'b010: opcode = JMP; 
+                    3'b011: opcode = JMP_ABS; // ?
                     3'b100: opcode = STY;
                     3'b101: opcode = LDY;
                     3'b110: opcode = CPY;
@@ -232,11 +239,11 @@ module cpu (
                             end
                             3'b110: begin
                                 opcode = INY;
-                                addressing_mode = TODO;
+                                addressing_mode = IMPLIED0;
                             end
                             3'b111: begin
                                 opcode = INX;
-                                addressing_mode = TODO;
+                                addressing_mode = IMPLIED0;
                             end
                         endcase
                     end
@@ -246,6 +253,19 @@ module cpu (
                             addressing_mode = UNSUPPORTED_AM;
                         end
                         else addressing_mode = ZERO_PAGE;
+                    end
+                    3'b011: begin
+                        if (aaa == 3'b010) begin
+                            opcode = JMP;
+                            addressing_mode = ABSOLUTE;
+                        end else if (aaa == 3'b011) begin
+                            opcode = JMP;
+                            addressing_mode = INDIRECT;
+                        end else begin
+                            opcode = UNSUPPORTED_OP;
+                            addressing_mode = UNSUPPORTED_AM;
+                        end
+                         
                     end
                     3'b101: begin
                          if ((aaa == 3'b100) || (aaa == 3'b101)) addressing_mode = ZERO_PAGE_X; 
@@ -449,9 +469,12 @@ module cpu (
     // instruction for which we want to find the memory address
     // and before we simulate this instruction
 
+    logic [15:0] memory_2_byte;
+
     logic [1:0] instruction_requests_needed;
     logic [2:0] mem_requests_needed;
     always_comb begin
+        error1 = 0;
         case (addressing_mode) 
             ZERO_PAGE_X: begin
                 instruction_requests_needed = 2;
@@ -493,7 +516,13 @@ module cpu (
                 instruction_requests_needed = 3;
                 mem_requests_needed = 1;
             end
-            default: error <= 1;
+            IMPLIED0: begin
+                // ??
+                instruction_requests_needed = 1;
+                mem_requests_needed = 0;
+
+            end
+            default: error1 = 1;
         endcase
     end
 
@@ -505,6 +534,7 @@ module cpu (
     logic [2:0] mem_requests_done;
 
     always_comb begin
+        error2 = 0;
         case (addressing_mode) 
             ZERO_PAGE_X: begin
                 addr_comb[7:0] = instruction_arg + x;
@@ -544,7 +574,8 @@ module cpu (
             // no mem
             ZERO_PAGE: addr_comb = {8'b0, instruction_arg};
             ABSOLUTE: addr_comb = {instruction_arg, instruction_arg2}; 
-            default: error = 1;
+            IMPLIED0: addr_comb = 0;
+            default: error2 = 1;
         endcase 
     end
 
@@ -581,17 +612,28 @@ module cpu (
         end
 
         if ((state == REQUESTED_MEM) && (!mem_received) && din_valid) begin
+            mem_requests_done <= mem_requests_done + 1;
             if (mem_requests_needed == 1) begin
-                memory <= din; 
+                memory <= din;
+                addr <= addr_comb + 1; 
+                if (((mem_requests_done == 0) && (opcode != JMP)
+                    || 
+                    (mem_requests_done == 1) && (opcode == JMP)
+                    ) 
+              ) begin
+                memory_2_byte <= {memory, din};
                 mem_received <= 1;
                 state <= MEM_VAL_RECEIVED; 
+              end
+        
+             
             end else begin
-                if (mem_requests_done == 1) begin
+                if (mem_requests_done == 0) begin
                     intermediate_mem1 <= din;
                     dout <= 0; 
                     addr <= addr_comb; 
                     rw <= 0; 
-                end else if (mem_requests_done == 2) begin
+                end else if (mem_requests_done == 1) begin
                     intermediate_mem2 <= din;
                     dout <= 0; 
                     addr <= addr_comb; 
@@ -609,10 +651,22 @@ module cpu (
 
     always_ff @(posedge clk_slow) begin
         if (rst) begin
-            // set initial register values
+            addr <= 0;
+            a <= 8'b0;
+            pc <= 16'b1111_1111_1111_1100;
+            x <= 8'b0;
+            y <= 8'b0;
+            s <= 8'b1111_1101;
+            c <= 0;
+            z <= 0;
+            i <= 1;
+            d <= 0; 
+            v <= 0;
+            n <= 0;
+            state <= START;
             count <= 0; 
-            estimated_cycles <= 2;
-            error <= 0;
+            estimated_cycles <= 5; // slower for now
+            // error <= 0;
 
         end else begin
             
@@ -626,16 +680,28 @@ module cpu (
                     addr <= pc;
                     rw <= 0; // read
                     state <= REQUESTED_INSTRUCTION;
+                    instruction_received <= 0;
+                    instruction_request_count <= 0;
                     instruction_done <= 0;
                     mem_requests_done <= 0;
                 end
             end else if (!(state == ERROR)) begin
                 count <= count + 1;
-            end
+            end 
 
-            if (error == 1 || state == ERROR) begin
+            if (((error1 == 1 || error2 == 1) && state >= INSTRUCTION_RECEIVED) || state == ERROR) begin
                 state <= ERROR;
             end else begin
+                if (state == START) begin
+                    dout <= 0;
+                    addr <= pc;
+                    rw <= 0; // read
+                    state <= REQUESTED_INSTRUCTION;
+                    instruction_received <= 0;
+                    instruction_request_count <= 0;
+                    instruction_done <= 0;
+                    mem_requests_done <= 0;
+                end
 
                 if (state == INSTRUCTION_RECEIVED) begin
                     instruction_received <= 0;
@@ -658,6 +724,7 @@ module cpu (
                         dout <= 0; 
                         addr <= addr_comb; 
                         rw <= 0; 
+                        mem_received <= 0;
                         state <= REQUESTED_MEM;
 
                     end
@@ -819,7 +886,7 @@ module cpu (
                         JMP: begin
                             // need to read two bytes
                             // ?????????
-                            pc <= memory;
+                            pc <= memory_2_byte;
                         end
                         JSR: state <= ERROR;
                         // interrupt
@@ -945,7 +1012,7 @@ module cpu (
                         // JSR_ABS:
                         default: begin
                             instruction_done <= 1; 
-                            error <= 1;
+                            state <= ERROR;
                         end
 
                     endcase
