@@ -60,6 +60,7 @@ async def test_ppu(dut):
       for cycle in range(341):
          pixelValidAtSomePoint = False
          x = cycle - 1
+         print(x)
          y = scanline
          for _ in range(19):
             await ClockCycles(dut.clk, 1)

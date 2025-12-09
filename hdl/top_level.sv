@@ -218,7 +218,7 @@ assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig; // now that i'm thinking
         .pixel_clk(clk_pixel),
         .rst(sys_rst_pixel),
         .h_count(h_count_hdmi),
-        .v_count(v_count_hdmi),
+        .v_count(v_count_hdmi),f
         .v_sync(v_sync_hdmi),
         .h_sync(h_sync_hdmi),
         .new_frame(new_frame_hdmi),
