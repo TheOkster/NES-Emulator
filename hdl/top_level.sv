@@ -92,8 +92,9 @@ module top_level(
         ppu_sync1_trig <= ppu_sync0_trig;
     end
     logic ppu_clk_trig, cpu_clk_trig;
-assign cpu_clk_trig = cpu_sync0_trig & ~cpu_sync1_trig;
-assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig;
+assign cpu_clk_trig = cpu_sync0_trig & ~cpu_sync1_trig; // TODO: the way the cpu clock works i can't do this actually so make
+// this an actual clock
+assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig; // now that i'm thinking about it, this isn't good for duty cycle reasons
 
 
     cpu my_cpu(
@@ -199,7 +200,7 @@ assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig;
         .pixel_clk(clk_pixel),
         .rst(sys_rst_pixel),
         .h_count(h_count_hdmi),
-        .v_count(v_count_hdmi),
+        .v_count(v_count_hdmi),f
         .v_sync(v_sync_hdmi),
         .h_sync(h_sync_hdmi),
         .new_frame(new_frame_hdmi),
