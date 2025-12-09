@@ -60,7 +60,7 @@ module mapper0 (
     logic [13:0] ppu_mapped_addr;
 
     always_comb begin
-        if (cpu_addr < 16'h8000) begin
+        if (cpu_addr < 16'h8000 && !cpu_rw) begin
             cpu_mapped_addr = 0;
             cpu_din_valid = 0;
         end else begin
@@ -71,7 +71,7 @@ module mapper0 (
 
     always_comb begin
         ppu_mapped_addr = ppu_addr;
-        ppu_din_valid = 1;
+        ppu_din_valid = !ppu_rw;
     end
 
     xilinx_true_dual_port_read_first_2_clock_ram #(

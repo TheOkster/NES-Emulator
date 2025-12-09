@@ -21,3 +21,4 @@
 !util/
 !util/*.pal
 !util/*.py
+!ctrl/*.py

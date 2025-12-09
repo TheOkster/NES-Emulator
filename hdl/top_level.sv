@@ -13,6 +13,10 @@ module top_level(
         output logic [6:0] ss0_c,
         output logic [6:0] ss1_c,
         output logic [2:0] pmoda,
+
+        // UART
+        input wire              uart_rxd, // UART computer->FPGA
+        output logic            uart_txd, // UART FPGA->computer
                 // hdmi port
         output logic [2:0]  hdmi_tx_p, //hdmi output signals (positives) (blue, green, red)
         output logic [2:0]  hdmi_tx_n, //hdmi output signals (negatives) (blue, green, red)
@@ -158,7 +162,18 @@ assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig;
         .cpu_din_valid(cpu_mem_cpu_din_valid),
         .cpu_rw(cpu_rw)
     );
-    assign cpu_din_valid = cart_cpu_din_valid || ppu_cpu_din_valid;
+
+    cpu_mem cpu_mem_man(
+        .clk(clk_100_passthrough),
+        .rst(sys_rst),
+        .cpu_dout(cpu_dout),
+        .cpu_addr(cpu_addr),
+        .cpu_din(cpu_mem_cpu_din),
+        .cpu_din_valid(cpu_mem_cpu_din_valid),
+        .cpu_rw(cpu_rw)
+    );
+    
+    assign cpu_din_valid = cart_cpu_din_valid || ppu_cpu_din_valid || cpu_mem_cpu_din_valid;
     assign cpu_din = cpu_mem_cpu_din_valid ? cpu_mem_cpu_din :
         cart_cpu_din_valid ? cart_cpu_din : 
         ppu_cpu_din_valid ? ppu_cpu_din : 
