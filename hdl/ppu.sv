@@ -128,7 +128,7 @@ module ppu (
     logic [4:0] palette_ram_inp_addr;
     logic [4:0] palette_ram_inp_addr_ac;
     logic [4:0] palette_ram_inp_addr_deb;
-    assign palette_ram_inp_addr_ac = (cycles_after >= 4) ? palette_ram_inp_addr_deb : palette_ram_inp_addr;
+    assign palette_ram_inp_addr_ac = (cycles_after >= 5) ? palette_ram_inp_addr_deb : palette_ram_inp_addr;
     logic [4:0] palette_ram_wri_addr;
 
     logic [23:0] palette_ram_output;
@@ -228,7 +228,7 @@ module ppu (
     logic [2:0] loading_stage_cycle;
 
 logic patt_table_avail;
-    assign patt_table_avail = ~loading_stage & cycles_after > 4 & !ppu_clk_trig;
+    assign patt_table_avail = ~loading_stage & cycles_after > 5 & !ppu_clk_trig;
     assign patt_table_out_valid = patt_table_avail & !first_time;
     assign patt_table_x =  patt_table_ind*128 + tile_col*8 + rel_col;
     assign patt_table_y = tile_row*8 + rel_row;
@@ -247,6 +247,8 @@ logic patt_table_avail;
             loading_stage_cycle <= 0;
             patt_table_ind <= 0;
             fine_x <= 0;
+            vram_addr <= 0;
+            nametable_sel <= 0;
             // patt_table_pix <= 0;
         end else begin
             if(patt_table_avail & !first_time) begin
@@ -265,7 +267,7 @@ logic patt_table_avail;
                 end
             end else begin
                 // patt_table_out_valid <= 0;
-                if(loading_stage & !first_time & (loading_stage_cycle != 0 | cycles_after == 4)) begin
+                if(loading_stage & !first_time & (loading_stage_cycle != 0 | cycles_after == 5)) begin
                     loading_stage_cycle <= (loading_stage_cycle == 4) ? 0 : loading_stage_cycle + 1;
                     if(loading_stage_cycle == 0) begin
                         get_tile_msb <= 0;
@@ -291,8 +293,8 @@ logic patt_table_avail;
     logic [7:0] bg_nt_msb;
     
     
-    logic [14:0] bg_shift_pat_msb;
-    logic [14:0] bg_shift_pat_lsb;
+    logic [15:0] bg_shift_pat_msb;
+    logic [15:0] bg_shift_pat_lsb;
     logic [1:0] bg_shift_at_lsb;
     logic [1:0] bg_shift_at_msb;
 
@@ -304,11 +306,11 @@ logic patt_table_avail;
     logic pix_pal_lsbit;
     logic [7:0] pix_bit;
     assign pix_bit = 8'b1000_0000 >> fine_x;
-    assign pix_msbit = (pix_bit & bg_shift_pat_msb) != 0;
-    assign pix_lsbit = (pix_bit & bg_shift_pat_lsb) != 0;
+    assign pix_msbit = (pix_bit & bg_shift_pat_msb[15:8]) != 0;
+    assign pix_lsbit = (pix_bit & bg_shift_pat_lsb[15:8]) != 0;
 
-    assign pix_pal_msbit = (pix_bit & bg_shift_at_msb) != 0;
-    assign pix_pal_lsbit = (pix_bit & bg_shift_at_lsb) != 0;
+    assign pix_pal_msbit = (pix_bit && bg_shift_at_msb[1]) != 0;
+    assign pix_pal_lsbit = (pix_bit && bg_shift_at_lsb[1]) != 0;
     always_ff @(posedge clk) begin
         if(rst) begin
             // May need to rid
@@ -355,7 +357,7 @@ logic patt_table_avail;
 
             // Yes, I know I'm essentially wasting a cycle
                 
-                if(dot == 340 && scanline == 239) begin
+                if(dot == 1 && scanline == 241) begin
                     vblank_flag <= 1;
                     if (nmi_enable) nmi <= 1;
                 end else if (dot == 1 && scanline == 261) begin
@@ -365,7 +367,7 @@ logic patt_table_avail;
                     nmi <= 0;
                 end
 
-                if(2 <= dot && dot <= 257) begin
+                if(((2 <= dot && dot <= 257) || (321 <= dot && dot <= 338) ) && ((0 <= scanline && scanline < 240) || (scanline == 261))) begin
                     case (dot[2:0])
                         0: begin
                             if(cycles_after == 1) begin
@@ -382,29 +384,36 @@ logic patt_table_avail;
                         1: begin
                             if (cycles_after == 1) name_table_re_addr <= vram_addr[11:0];
                             // 2 cycles later
-                            if (cycles_after == 3) next_tile_nt <= name_table_out;
+                            if (cycles_after == 4) next_tile_nt <= name_table_out;
                         end
                         3: begin
                             if (cycles_after == 1) name_table_re_addr <= 16'h23C0 | (vram_addr & 16'h0C00) | ((vram_addr >> 4) & 8'h38) | ((vram_addr >> 2) & 8'h07);
-                            if (cycles_after == 3) next_tile_at <= (name_table_out >> (quadrant * 2)) & 3'h3;
+                            if (cycles_after == 4) begin
+                                case(quadrant)
+                                    2'b00: next_tile_at <= name_table_out[1:0];
+                                    2'b01: next_tile_at <= name_table_out[3:2];
+                                    2'b10: next_tile_at <= name_table_out[5:4];
+                                    2'b11: next_tile_at <= name_table_out[7:6];
+                                endcase
+                            end
                         end
                         5: begin
                             if (cycles_after == 1 & !ppu_clk_trig) patt_table_re_addr <= (back_pat_addr_switch << 12) + (next_tile_nt << 4) + (vram_addr.fine_y + 0);
                             // 2 cycles later
-                            if (cycles_after == 3) bg_nt_lsb <= patt_table_out;
+                            if (cycles_after == 4) bg_nt_lsb <= patt_table_out;
                         end
                         7: begin
                             if (cycles_after == 1 & !ppu_clk_trig)  patt_table_re_addr <= (back_pat_addr_switch << 12) + (next_tile_nt << 4) + (vram_addr.fine_y + 8);
                             // 2 cycles later
-                            if (cycles_after == 3) bg_nt_msb <= patt_table_out;
+                            if (cycles_after == 4) bg_nt_msb <= patt_table_out;
                         end
                         default: ;
 
                     endcase
                     if(cycles_after == 1) begin
                         if(dot[2:0] == 1) begin
-                            bg_shift_pat_msb <= {bg_shift_pat_msb[14:8], bg_nt_msb};
-                            bg_shift_pat_lsb <= {bg_shift_pat_lsb[14:8], bg_nt_lsb};
+                            bg_shift_pat_msb <= {bg_shift_pat_msb[14:8], bg_nt_msb, 1'b0};
+                            bg_shift_pat_lsb <= {bg_shift_pat_lsb[14:8], bg_nt_lsb, 1'b0};
 
                             bg_shift_at_msb <= {bg_shift_at_msb[0], next_tile_at[1]};
                             bg_shift_at_lsb <= {bg_shift_at_lsb[0], next_tile_at[0]};
@@ -427,7 +436,6 @@ logic patt_table_avail;
                                     end else begin
                                         vram_addr.coarse_y <= vram_addr.coarse_y + 1;
                                     end
-                                vram_addr.coarse_x <= vram_addr.coarse_x + 1;
                                 end
                             end
                         end
@@ -435,29 +443,28 @@ logic patt_table_avail;
 
                     if(dot == 257) begin
                         if(ppu_mask[4] || ppu_mask[3]) begin
-                            vram_addr.name_table_sel[0] <= temp_vram_coarse_x[0];
+                            vram_addr.name_table_sel[0] <= temp_vram_name_table_sel[0];
                             vram_addr.coarse_x <= temp_vram_coarse_x;
                         end
                     end
                 end
                 if(1 <= dot && dot <= 256 && 0 <= scanline && scanline < 240) begin
-                    if(ppu_mask[3]) begin
-                        if(cycles_after == 1) palette_ram_inp_addr <= 4 * {pix_pal_msbit, pix_pal_lsbit} + {pix_msbit, pix_lsbit};
-                        // 1 cycle later
-                        if(cycles_after == 2) begin
-                            pixel_x <= (dot - 1);
-                            pixel_y <= scanline;
-                            pixel_valid <= 1;
-                            pixel <= palette_ram_output;
-                        end else begin
-                            pixel_valid <= 0;
-                        end
+                    if(cycles_after == 1) palette_ram_inp_addr <= 4 * {pix_pal_msbit, pix_pal_lsbit} + {pix_msbit, pix_lsbit};
+                    // 1 cycle later
+                    if(cycles_after == 2) begin
+                        pixel_x <= (dot - 1);
+                        pixel_y <= scanline;
+                        pixel_valid <= 1;
+                        pixel <= palette_ram_output;
+                    end else begin
+                        pixel_valid <= 0;
                     end
                 end
                 if(scanline == 261 && 280 <= dot && dot < 305) begin
                     if(ppu_mask[4] || ppu_mask[3]) begin
-                        vram_addr.name_table_sel[1] <= temp_vram_coarse_x[1];
+                        vram_addr.name_table_sel[1] <= temp_vram_name_table_sel[1];
                         vram_addr.coarse_y <= temp_vram_coarse_y;    
+                        vram_addr.fine_y <= temp_vram_fine_y; // TODO: double check
                     end            
                 end
             end

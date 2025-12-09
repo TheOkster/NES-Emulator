@@ -21,4 +21,4 @@
 !util/
 !util/*.pal
 !util/*.py
-!ctrl/*.py
+!hdl/*.test
