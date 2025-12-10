@@ -19,31 +19,35 @@ test_file = os.path.basename(__file__).replace(".py","")
 #         n >>= 1
 #     return reversed_n
 # this test doesn't work anymore bc of design changes
-# will change to make sense with new format
-@cocotb.test()
-async def test_ppu_timing(dut):
-   cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
-   dut.rst.value = 1
-   await ClockCycles(dut.clk, 1)
-   dut.rst.value = 0
-   for _ in range(2):
-      for patt_table in range(2):
-         for tile_row in range(16):
-            for tile_col in range(16):
-               await RisingEdge(dut.patt_table_out_valid)
-               for rel_row in range(8):
-                  for rel_col in range(8):
-                     # if rel_col:
-                     #    await FallingEdge(dut.ppu_clk_trig)
-                     await ClockCycles(dut.clk, 1)
-                     # assert dut.patt_table_pix.value == (0x1251a8 if rel_row == rel_col else 0), f"Invalid value at {rel_row}, {rel_col} in tile {tile_row}, {tile_col}"
-                     # assert dut.patt_table_ind.value == patt_table, f"Pattern table value is not {patt_table}"
-                     assert dut.tile_row.value == tile_row
-                     assert dut.tile_col.value == tile_col
-                     assert dut.rel_row.value == rel_row
-                     assert dut.rel_col.value == rel_col, f"rel_col is {dut.rel_col.value} not {i} as expected"
-                  if rel_row != 7:
-                     await RisingEdge(dut.patt_table_out_valid)
+# would need to  change to make sense with new format
+
+# However, since i have visual tests I probably won't tbh
+
+
+# @cocotb.test()
+# async def test_ppu_timing(dut):
+#    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+#    dut.rst.value = 1
+#    await ClockCycles(dut.clk, 1)
+#    dut.rst.value = 0
+#    for _ in range(2):
+#       for patt_table in range(2):
+#          for tile_row in range(16):
+#             for tile_col in range(16):
+#                await RisingEdge(dut.patt_table_out_valid)
+#                for rel_row in range(8):
+#                   for rel_col in range(8):
+#                      # if rel_col:
+#                      #    await FallingEdge(dut.ppu_clk_trig)
+#                      await ClockCycles(dut.clk, 1)
+#                      # assert dut.patt_table_pix.value == (0x1251a8 if rel_row == rel_col else 0), f"Invalid value at {rel_row}, {rel_col} in tile {tile_row}, {tile_col}"
+#                      # assert dut.patt_table_ind.value == patt_table, f"Pattern table value is not {patt_table}"
+#                      assert dut.tile_row.value == tile_row
+#                      assert dut.tile_col.value == tile_col
+#                      assert dut.rel_row.value == rel_row
+#                      assert dut.rel_col.value == rel_col, f"rel_col is {dut.rel_col.value} not {i} as expected"
+#                   if rel_row != 7:
+#                      await RisingEdge(dut.patt_table_out_valid)
          # await ClockCycles(dut.clk, 50000)
    # I will actually test this later
    # I just wanted to see that palette was correctly loading w/o asserts

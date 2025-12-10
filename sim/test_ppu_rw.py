@@ -41,7 +41,7 @@ async def test_ppu_write(dut):
    await RisingEdge(dut.ppu_clk_trig)
    await RisingEdge(dut.ppu_clk_trig)
    # pixels = np.zeros((240, 256, 3), dtype=np.uint8)
-   await ClockCycles(dut.clk, 19*240*341)
+   await ClockCycles(dut.clk, 19*242*341)
    for _ in range(1*2):
       dut.cpu_dout.value = 0x69
       dut.cpu_rw.value = 1
@@ -93,6 +93,26 @@ async def test_ppu_write(dut):
       dut.cpu_rw.value = 0
    assert dut.temp_vram.value == 0x04E2, f"Expected dut.vram to be 0x04E2 but instead it is {dut.temp_vram.value}"
    assert dut.vram_addr.value == 0x7667, f"Expected dut.vram to be 0x7667 but instead it is {dut.vram_addr.value}"
+   for _ in range(1*1):
+      dut.cpu_dout.value = 0x90
+      dut.cpu_rw.value = 1
+      dut.cpu_addr.value = 0x2000
+      await ClockCycles(dut.clk, 19)
+      dut.cpu_rw.value = 0
+   assert dut.ppu_ctrl.value == 0x90, f"Expected ppu_ctrl to be 0x90 but instead it is {dut.ppu_ctrl.value}"
+   for _ in range(1*1):
+      dut.cpu_dout.value = 0x23
+      dut.cpu_rw.value = 1
+      dut.cpu_addr.value = 0x2002
+      await ClockCycles(dut.clk, 19)
+   assert (dut.ppu_status.value != 0x23), f"You can't write to ppustatus! What are you doing?"
+   assert ((dut.ppu_status.value >> 7) & 1), f"Vblank flag was 0 but it should be 1"
+   for _ in range(1*1):
+      dut.cpu_dout.value = 0x19
+      dut.cpu_rw.value = 0
+      dut.cpu_addr.value = 0x2002
+      await ClockCycles(dut.clk, 19)
+   assert not ((dut.ppu_status.value >> 7) & 1), f"Vblank flag was 1 but it should be 0 after read"
    print(dut.dot.value)
    # for _ in range(1*1):
    #    dut.cpu_dout.value = 0xA

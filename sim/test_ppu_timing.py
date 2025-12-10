@@ -39,7 +39,7 @@ async def test_ppu(dut):
    await RisingEdge(dut.ppu_clk_trig)
    await RisingEdge(dut.ppu_clk_trig)
    # await ClockCycles(dut.clk, 50000)
-   await ClockCycles(dut.clk, 19*240*341)
+   await ClockCycles(dut.clk, 19*241*341)
    for _ in range(1*1):
       dut.cpu_dout.value = 0xA
       dut.cpu_rw.value = 1
@@ -60,7 +60,6 @@ async def test_ppu(dut):
       for cycle in range(341):
          pixelValidAtSomePoint = False
          x = cycle - 1
-         print(x)
          y = scanline
          for _ in range(19):
             await ClockCycles(dut.clk, 1)
