@@ -178,6 +178,9 @@ module cpu (
     logic nmi_detected;
 
     always_comb begin
+        irq_detected = irq && !i;
+        nmi_detected = nmi;
+
         case(cc)
             2'b00: begin
                 case(aaa) 
@@ -200,7 +203,7 @@ module cpu (
                                 addressing_mode = TODO;
                             end
                             3'b001: begin
-                                opcode = JSR_ABS;
+                                opcode = JSR;
                                 addressing_mode = ABSOLUTE;
                             end
                             3'b010: begin
@@ -582,7 +585,7 @@ module cpu (
             ZERO_PAGE: addr_comb = {8'b0, instruction_arg};
             ABSOLUTE: addr_comb = {instruction_arg, instruction_arg2}; 
             IMPLIED0: addr_comb = 0;
-            IMPLIED1: addr_comb = s + 8;
+            IMPLIED1: addr_comb = s + 16'h0100;
             default: error2 = 1;
         endcase 
     end
@@ -638,9 +641,9 @@ module cpu (
             if (mem_requests_needed == 1) begin
                 memory <= din;
                 addr <= addr_comb + 1; 
-                if (((mem_requests_done == 0) && (opcode != JMP)
+                if ((((mem_requests_done == 0) && (opcode != JMP))
                     || 
-                    (mem_requests_done == 1) && (opcode == JMP)
+                    ((mem_requests_done == 1) && (opcode == JMP))
                     ) 
               ) begin
                 memory_2_byte <= {memory, din};
@@ -953,23 +956,57 @@ module cpu (
                         end
                         PHA: begin
                             addr <= 16'h0100 + s;
-                            dout <= A;
+                            dout <= a;
                             s <= s - 1;
                         end
                         // STACK
                         PHP: begin
                             addr <= 16'h0100 + s;
-                            dout <= {n, o, 1'b1, b, d, i, z, c};
+                            dout <= {n, v, 1'b1, b, d, i, z, c};
                             b <= 0;
                             s <= s - 1;
                         end
                         // STACK
-                        PLA: state <= ERROR;
+                        PLA: begin
+                            s <= s + 1;
+                            a <= memory;
+                            z = memory == 0;
+                            n = memory & 8'h80;
+                        end
                         // STACK
-                        PLP: state <= ERROR;
+                        PLP: begin
+                            s <= s + 1;
+                            c <= memory[0];
+                            z <= memory[1];
+                            i <= memory[2];
+                            d <= memory[3];
+                            b <= memory[4];
+                            v <= memory[6];
+                            n <= memory[7];
+                        end
                         // STACK
-                        ROL: state <= ERROR;
-                        ROR: state <= ERROR;
+                        ROL: begin
+                            c <= memory[7];
+                            z <= {memory[6:0], c} == 0;
+                            n <= memory[6];
+                            if (addressing_mode == ACCUMULATOR) a <= {memory[6:0], c};
+                            else begin
+                                addr <= addr_comb;
+                                dout <= {memory[6:0], c};
+                                rw <= 1;
+                            end
+                        end
+                        ROR: begin
+                            c <= memory[0];
+                            z <= {c, memory[7:1]} == 0;
+                            n <= c;
+                            if (addressing_mode == ACCUMULATOR) a <= {c, memory[7:1]};
+                            else begin
+                                addr <= addr_comb;
+                                dout <= {c, memory[7:1]};
+                                rw <= 1;
+                            end
+                        end
                         RTI: state <= ERROR;
                         // INTERRUPT
                         RTS: state <= ERROR;
