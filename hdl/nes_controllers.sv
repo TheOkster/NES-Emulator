@@ -30,7 +30,7 @@ module nes_controllers (
         .dout(controller_data_buf)
     );
 
-    always_ff (@posedge sys_clk) begin
+    always_ff @(posedge sys_clk) begin
         if (controller_data_valid) begin
             controller_to_write <= !controller_to_write;
             controller_out[controller_to_write] <= controller_data_buf;
@@ -43,9 +43,9 @@ module nes_controllers (
     logic [7:0] controller_data;
 
     always_ff @ (posedge nes_clk) begin
-        if (16'h4016 <= addr && addr <= 16'h4017) begin
+        if (16'h4016 <= cpu_addr && cpu_addr <= 16'h4017) begin
             if (cpu_rw) begin
-                controller_data <= controller_out >> 1;
+                controller_data <= controller_out[0][0] >> 1;
                 cpu_din <= {controller_out[0][0], 7'h00};
                 cpu_din_valid <= 1;
             end else begin

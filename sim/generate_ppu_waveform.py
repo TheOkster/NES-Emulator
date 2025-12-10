@@ -19,6 +19,8 @@ test_file = os.path.basename(__file__).replace(".py","")
 #         n >>= 1
 #     return reversed_n
 
+
+# This is lowkey useless now because I have other tests where I can find the PPU waveform
 @cocotb.test()
 async def test_ppu(dut):
    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
@@ -28,7 +30,6 @@ async def test_ppu(dut):
    await ClockCycles(dut.clk, 1)
    await ClockCycles(dut.clk, 50000)
    # I will actually test this later
-   # I just wanted to see that palette was correctly loading w/o asserts
 
       
 

@@ -165,7 +165,7 @@ assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig; // now that i'm thinking
     );
 
     logic uart_rx_buf0, uart_rx_buf1;
-    always_ff @(posedge clk_100mhz_passthrough) begin
+    always_ff @(posedge clk_100_passthrough) begin
         uart_rx_buf0 <= uart_rxd;
         uart_rx_buf1 <= uart_rx_buf0;
     end
@@ -174,7 +174,7 @@ assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig; // now that i'm thinking
     logic controller_cpu_din_valid;
     nes_controllers controllers (
         .sys_clk(clk_100_passthrough),
-        .nes_clk(clk_nes)
+        .nes_clk(clk_nes),
         .rst(sys_rst),
         .uart_rx(uart_rx_buf1),
         .cpu_dout(cpu_dout),
@@ -210,7 +210,7 @@ assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig; // now that i'm thinking
         .pixel_clk(clk_pixel),
         .rst(sys_rst_pixel),
         .h_count(h_count_hdmi),
-        .v_count(v_count_hdmi),f
+        .v_count(v_count_hdmi),
         .v_sync(v_sync_hdmi),
         .h_sync(h_sync_hdmi),
         .new_frame(new_frame_hdmi),
