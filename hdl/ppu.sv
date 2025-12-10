@@ -504,7 +504,7 @@ logic patt_table_avail;
                                     // temp_vram[7:0] <= cpu_dout;
                                     temp_vram.coarse_x <= cpu_dout[4:0];
                                     temp_vram.coarse_y[2:0] <= cpu_dout[7:5];
-                                    vram_addr <= {temp_vram[15:8], cpu_dout};
+                                    vram_addr <= {temp_vram[14:8], cpu_dout};
 
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w;
                                 end else begin
