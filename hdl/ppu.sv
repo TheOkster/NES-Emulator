@@ -103,7 +103,6 @@ module ppu (
     } scroll_reg;
     scroll_reg vram_addr;
     scroll_reg temp_vram;
-    logic [7:0] secondary_oam [31:0];
     // assign vram_addr[14:0] = {vram_fine_y, vram_name_table_sel, vram_coarse_y, vram_coarse_x};
 
     logic dma_even_passed;
@@ -120,7 +119,7 @@ module ppu (
     } oam_elt; // i can't believe i forgot structs were a thing :(
 
     oam_elt oam[64];  
-    oam_elt current_sprite_line[8];
+    oam_elt secondary_oam[8];
     initial begin
         //  $readmemh(`FPATH(2C07.mem), sys_palette); // May need to change
         //  $dumpfile("ppu.fst");
@@ -240,6 +239,8 @@ module ppu (
     logic loading_stage;
     logic [2:0] loading_stage_cycle;
 
+    logic [7:0] next_sprite_byte;
+
 logic patt_table_avail;
     assign patt_table_avail = ~loading_stage & cycles_after > 5 & !ppu_clk_trig;
     assign patt_table_out_valid = patt_table_avail & !first_time;
@@ -326,6 +327,12 @@ logic patt_table_avail;
 
     assign pix_pal_msbit = (pix_bit && bg_shift_at_msb[1]) != 0;
     assign pix_pal_lsbit = (pix_bit && bg_shift_at_lsb[1]) != 0;
+
+    logic [5:0] sprite_num;      
+    logic [1:0] sprite_byte_num;        
+    logic [2:0] sec_index; 
+    logic [3:0] found_count;
+
     always_ff @(posedge clk) begin
         if(rst) begin
             // May need to rid
@@ -587,38 +594,51 @@ logic patt_table_avail;
             cpu_din_valid <= ((cpu_addr[2:0] == 2 || cpu_addr[2:0] == 4 || ( cpu_addr[2:0] == 7 && vram_addr <= 16'h1FFF)) & cpu_rw != CPU_WRITE);
             // FOREGROUND rendering 
             // TODO: Properly integrate this
-
-            // if(!ppu_clk_trig) begin
-            //     if(dot == 1 && scanline != 261) begin
+            
+            // if(cycles_after == 1) begin
+            //     if(1 <= dot && dot < = 64 && scanline < 240) begin
             //         for(int i = 0; i < 8; i++) begin
-            //             current_sprite_line[i] <= 32'hFFFFFFFF;
+            //             secondary_oam[i] <= 32'hFFFFFFFF;
             //         end
             //     end
-            //     if(dot == 257) begin
-
+            //     if(dot == 64) begin
+            //         sprite_num <= 0;
+            //         next_sprite_byte <= 0;
+            //         found_count <= 0;
+            //         sprite_byte_num <= 0;
             //     end
+            //     if(65 <= dot && dot < 257 && sprite_num < 64) begin
+            //         if(dot % 2) begin
+            //             next_sprite_byte <= oam[i];
+            //         end else begin
+            //             if(((sprite_byte_num != 0) || next_sprite_byte in range)) begin
+            //                 if(found_count < 8 ) begin
+            //                     case(sprite_byte_num)
+            //                     0: secondary_oam[found_count].y <= next_sprite_byte;
+            //                     1: secondary_oam[found_count].tile <= next_sprite_byte;
+            //                     2: secondary_oam[found_count].att <= next_sprite_byte;
+            //                     3: begin 
+            //                             secondary_oam[found_count].x <= next_sprite_byte;
+            //                             sprite_num <= sprite_num + 1;
+            //                             found_count <= found_count + 1;
+            //                     end
+            //                     endcase
+            //                     sprite_byte_num <= sprite_byte_num + 1;
+            //                 end else begin
+            //                     ppu_status.sprite_overflow_flag <= 1;
+            //                 end
+            //             end else begin
+            //                 sprite_num <= sprite_num + 1;
+            //             end
+            //         end
+            //     end
+            //     i
             // end
             end   
         end
             /* Verify later */
     end
-    // logic [3:0] sprite_count;
-    // always_comb begin
-    //     sprite_count = 0;
-    //     for (i = 0; i < 64; i++) begin
-    //         if (sprite_count < 4'd9) begin
-    //             if (scanline >= oam[i].y && 
-    //                 scanline < oam[i].y + (sprite_size ? 10'sd16 : 10'sd8)) begin 
-    //                 if (sprite_count < 4'd8) begin
-    //                     spriteScanline[sprite_count] = oam[i];
-    //                 end
-    //                 sprite_count = sprite_count + 4'd1;
-    //             end
-    //         end
-    //     end
-    //     sprite_overflow_flag = (sprite_count > 4'd8);
-
-    // end
+    
     //  always_ff @(posedge ppu_clk_trig) begin
     //         if(cpu_addr == 16'h4014 && cpu_rw == CPU_WRITE && !dma) begin
     //             dma_addr_high <= cpu_din;
