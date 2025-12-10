@@ -3,6 +3,7 @@
 
 module nes_controllers (
         input wire sys_clk,
+        input wire nes_clk,
         input wire rst,
 
         input wire uart_rx,

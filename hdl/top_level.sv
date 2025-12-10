@@ -163,13 +163,23 @@ assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig;
         .cpu_rw(cpu_rw)
     );
 
-    cpu_mem cpu_mem_man(
-        .clk(clk_100_passthrough),
+    logic uart_rx_buf0, uart_rx_buf1;
+    always_ff @(posedge clk_100mhz_passthrough) begin
+        uart_rx_buf0 <= uart_rxd;
+        uart_rx_buf1 <= uart_rx_buf0;
+    end
+
+    logic [7:0] controller_cpu_din;
+    logic controller_cpu_din_valid;
+    nes_controllers controllers (
+        .sys_clk(clk_100_passthrough),
+        .nes_clk(clk_nes)
         .rst(sys_rst),
+        .uart_rx(uart_rx_buf1),
         .cpu_dout(cpu_dout),
         .cpu_addr(cpu_addr),
-        .cpu_din(cpu_mem_cpu_din),
-        .cpu_din_valid(cpu_mem_cpu_din_valid),
+        .cpu_din(controller_cpu_din),
+        .cpu_din_valid(controller_cpu_din_valid),
         .cpu_rw(cpu_rw)
     );
     
