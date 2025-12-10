@@ -21,47 +21,47 @@ module palette_ram
     logic [4:0] actual_addr;
     initial begin
          $readmemh(`FPATH(2C07.mem), sys_palette); // May need to change
-
+         $readmemh(`FPATH(palette_ram.mem), palette_ram);
 //          // temp
-         palette_ram[0]  = 8'h0F;
-palette_ram[1]  = 8'h11;
-palette_ram[2]  = 8'h21;
-palette_ram[3]  = 8'h31;
+//          palette_ram[0]  = 8'h0F;
+// palette_ram[1]  = 8'h11;
+// palette_ram[2]  = 8'h21;
+// palette_ram[3]  = 8'h31;
 
-palette_ram[4]  = 8'h0F;
-palette_ram[5]  = 8'h12;
-palette_ram[6]  = 8'h22;
-palette_ram[7]  = 8'h32;
+// palette_ram[4]  = 8'h0F;
+// palette_ram[5]  = 8'h12;
+// palette_ram[6]  = 8'h22;
+// palette_ram[7]  = 8'h32;
 
-palette_ram[8]  = 8'h0F;
-palette_ram[9]  = 8'h13;
-palette_ram[10] = 8'h23;
-palette_ram[11] = 8'h33;
+// palette_ram[8]  = 8'h0F;
+// palette_ram[9]  = 8'h13;
+// palette_ram[10] = 8'h23;
+// palette_ram[11] = 8'h33;
 
-palette_ram[12] = 8'h0F;
-palette_ram[13] = 8'h14;
-palette_ram[14] = 8'h24;
-palette_ram[15] = 8'h34;
+// palette_ram[12] = 8'h0F;
+// palette_ram[13] = 8'h14;
+// palette_ram[14] = 8'h24;
+// palette_ram[15] = 8'h34;
 
-palette_ram[16] = 8'h0F;
-palette_ram[17] = 8'h15;
-palette_ram[18] = 8'h25;
-palette_ram[19] = 8'h35;
+// palette_ram[16] = 8'h0F;
+// palette_ram[17] = 8'h15;
+// palette_ram[18] = 8'h25;
+// palette_ram[19] = 8'h35;
 
-palette_ram[20] = 8'h0F;
-palette_ram[21] = 8'h16;
-palette_ram[22] = 8'h26;
-palette_ram[23] = 8'h36;
+// palette_ram[20] = 8'h0F;
+// palette_ram[21] = 8'h16;
+// palette_ram[22] = 8'h26;
+// palette_ram[23] = 8'h36;
 
-palette_ram[24] = 8'h0F;
-palette_ram[25] = 8'h17;
-palette_ram[26] = 8'h27;
-palette_ram[27] = 8'h37;
+// palette_ram[24] = 8'h0F;
+// palette_ram[25] = 8'h17;
+// palette_ram[26] = 8'h27;
+// palette_ram[27] = 8'h37;
 
-palette_ram[28] = 8'h0F;
-palette_ram[29] = 8'h18;
-palette_ram[30] = 8'h28;
-palette_ram[31] = 8'h38;
+// palette_ram[28] = 8'h0F;
+// palette_ram[29] = 8'h18;
+// palette_ram[30] = 8'h28;
+// palette_ram[31] = 8'h38;
 
         //  $dumpfile("palette_ram.fst");
         //  for (int i = 0; i < 64; i = i + 1)

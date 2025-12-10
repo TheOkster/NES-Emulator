@@ -74,21 +74,21 @@ module ppu (
     logic [2:0] fine_x;
 
 
-    logic [4:0] temp_vram_coarse_x;
-    logic [4:0] temp_vram_coarse_y;
-    logic [1:0] temp_vram_name_table_sel;
-    logic [2:0] temp_vram_fine_y;
-    logic [15:0] temp_vram_addr;
-    assign temp_vram_addr[14:0] = {temp_vram_fine_y, temp_vram_name_table_sel, temp_vram_coarse_y, temp_vram_coarse_x};
+    // logic [4:0] temp_vram.coarse_x = 0;
+    // logic [4:0] temp_vram.coarse_y = 0;
+    // logic [1:0] temp_vram.name_table_sel = 0;
+    // logic [2:0] temp_vram.fine_y = 0;
 
     // reg vram
 
-    logic [4:0] vram_coarse_x;
-    logic [4:0] vram_coarse_y;
-    logic [1:0] vram_name_table_sel;
-    logic [2:0] vram_fine_y;
-    logic [15:0] vram_addr;
-
+    typedef struct packed {
+        logic [2:0] fine_y;
+        logic [1:0] name_table_sel;
+        logic [4:0] coarse_y;
+        logic [4:0] coarse_x;
+    } scroll_reg;
+    scroll_reg vram_addr;
+    scroll_reg temp_vram;
     logic [7:0] secondary_oam [31:0];
     // assign vram_addr[14:0] = {vram_fine_y, vram_name_table_sel, vram_coarse_y, vram_coarse_x};
 
@@ -127,7 +127,7 @@ module ppu (
     logic [4:0] palette_ram_inp_addr;
     logic [4:0] palette_ram_inp_addr_ac;
     logic [4:0] palette_ram_inp_addr_deb;
-    assign palette_ram_inp_addr_ac = (cycles_after >= 4) ? palette_ram_inp_addr_deb : palette_ram_inp_addr;
+    assign palette_ram_inp_addr_ac = (cycles_after >= 5) ? palette_ram_inp_addr_deb : palette_ram_inp_addr;
     logic [4:0] palette_ram_wri_addr;
 
     logic [23:0] palette_ram_output;
@@ -157,8 +157,8 @@ module ppu (
     logic [11:0] name_table_re_addr;
     name_table my_nt(.clk(clk), .we(name_table_we),
     .read_addr(name_table_re_addr), .write_addr(name_table_wr_addr),
-    .data_in(name_table_in), .is_mirroring_horiz(1'b1),
-    .rst(0), .data_out(name_table_out));
+    .data_in(name_table_in), .is_mirroring_horiz(1'b0),
+    .rst(rst), .data_out(name_table_out));
 
 
     logic [12:0] patt_table_wr_addr;
@@ -227,13 +227,14 @@ module ppu (
     logic [2:0] loading_stage_cycle;
 
 logic patt_table_avail;
-    assign patt_table_avail = ~loading_stage & cycles_after > 4 & !ppu_clk_trig;
+    assign patt_table_avail = ~loading_stage & cycles_after > 5 & !ppu_clk_trig;
     assign patt_table_out_valid = patt_table_avail & !first_time;
     assign patt_table_x =  patt_table_ind*128 + tile_col*8 + rel_col;
     assign patt_table_y = tile_row*8 + rel_row;
     assign patt_table_pix = palette_ram_output;
     assign patt_table_re_addr_deb = 16'h1000*patt_table_ind + 256 * tile_row + 16 * tile_col + rel_row + 8*get_tile_msb;
     assign palette_ram_inp_addr_deb = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
+    assign nmi = nmi_enable & (242 <= scanline <= 260) || (scanline == 261 && dot == 0) || (scanline == 241 & dot != 0);
 
     always_ff @(posedge clk) begin
         if(rst) begin   
@@ -245,6 +246,10 @@ logic patt_table_avail;
             loading_stage <= 1;
             loading_stage_cycle <= 0;
             patt_table_ind <= 0;
+            fine_x <= 0;
+            vram_addr <= 0;
+            nametable_sel <= 0;
+            temp_vram <= 0;
             // patt_table_pix <= 0;
         end else begin
             if(patt_table_avail & !first_time) begin
@@ -263,7 +268,7 @@ logic patt_table_avail;
                 end
             end else begin
                 // patt_table_out_valid <= 0;
-                if(loading_stage & !first_time & (loading_stage_cycle != 0 | cycles_after == 4)) begin
+                if(loading_stage & !first_time & (loading_stage_cycle != 0 | cycles_after == 5)) begin
                     loading_stage_cycle <= (loading_stage_cycle == 4) ? 0 : loading_stage_cycle + 1;
                     if(loading_stage_cycle == 0) begin
                         get_tile_msb <= 0;
@@ -282,15 +287,15 @@ logic patt_table_avail;
         end
     end
     logic [1:0] quadrant;
-    assign quadrant = {vram_coarse_y[1], vram_coarse_x[1]};  
+    assign quadrant = {vram_addr.coarse_y[1], vram_addr.coarse_x[1]};  
     logic [7:0] next_tile_nt;
     logic [7:0] next_tile_at;
     logic [7:0] bg_nt_lsb;
     logic [7:0] bg_nt_msb;
     
     
-    logic [14:0] bg_shift_pat_msb;
-    logic [14:0] bg_shift_pat_lsb;
+    logic [15:0] bg_shift_pat_msb;
+    logic [15:0] bg_shift_pat_lsb;
     logic [1:0] bg_shift_at_lsb;
     logic [1:0] bg_shift_at_msb;
 
@@ -302,11 +307,11 @@ logic patt_table_avail;
     logic pix_pal_lsbit;
     logic [7:0] pix_bit;
     assign pix_bit = 8'b1000_0000 >> fine_x;
-    assign pix_msbit = (pix_bit & bg_shift_pat_msb) != 0;
-    assign pix_lsbit = (pix_bit & bg_shift_pat_lsb) != 0;
+    assign pix_msbit = (pix_bit & bg_shift_pat_msb[15:8]) != 0;
+    assign pix_lsbit = (pix_bit & bg_shift_pat_lsb[15:8]) != 0;
 
-    assign pix_pal_msbit = (pix_bit & bg_shift_at_msb) != 0;
-    assign pix_pal_lsbit = (pix_bit & bg_shift_at_lsb) != 0;
+    assign pix_pal_msbit = (pix_bit && bg_shift_at_msb[1]) != 0;
+    assign pix_pal_lsbit = (pix_bit && bg_shift_at_lsb[1]) != 0;
     always_ff @(posedge clk) begin
         if(rst) begin
             // May need to rid
@@ -325,8 +330,13 @@ logic patt_table_avail;
             scanline <= 260;
             palette_ram_we <= 0;
             cycles_after <= 0;
-            w <= 1;
+            w <= 0;
             is_clock_even <= 0;
+
+            temp_vram.coarse_x <= 0;
+            temp_vram.coarse_y <= 0;
+            temp_vram.fine_y <= 0;
+            temp_vram.name_table_sel <= 0;
         end else begin
             // palette_ram_we <= (cpu_rw == CPU_WRITE && cpu_addr[2:0] == 3'h7 && ppu_addr >= 16'h3F00);
             first_time <= 0;
@@ -348,26 +358,26 @@ logic patt_table_avail;
 
             // Yes, I know I'm essentially wasting a cycle
                 
-                if(dot == 340 && scanline == 239) begin
+                if(dot == 1 && scanline == 241) begin
                     vblank_flag <= 1;
-                    if (nmi_enable) nmi <= 1;
+                    // if (nmi_enable) nmi <= 1;
                 end else if (dot == 1 && scanline == 261) begin
                     vblank_flag <= 0;
-                    nmi <= 0;
+                    // nmi <= 0;
                 end else begin
-                    nmi <= 0;
+                    // nmi <= 0;
                 end
 
-                if(2 <= dot && dot <= 257) begin
+                if(((2 <= dot && dot <= 257) || (321 <= dot && dot <= 338) ) && ((0 <= scanline && scanline < 240) || (scanline == 261))) begin
                     case (dot[2:0])
                         0: begin
                             if(cycles_after == 1) begin
                             if(ppu_mask[4] || ppu_mask[3]) begin
-                                if(vram_coarse_x == 31) begin
-                                    vram_name_table_sel[0] <= ~vram_name_table_sel[0];
-                                    vram_coarse_x <= 0;
+                                if(vram_addr.coarse_x == 31) begin
+                                    vram_addr.name_table_sel[0] <= ~vram_addr.name_table_sel[0];
+                                    vram_addr.coarse_x <= 0;
                                 end else begin
-                                vram_coarse_x <= vram_coarse_x + 1;
+                                vram_addr.coarse_x <= vram_addr.coarse_x + 1;
                                 end
                             end
                             end
@@ -375,29 +385,36 @@ logic patt_table_avail;
                         1: begin
                             if (cycles_after == 1) name_table_re_addr <= vram_addr[11:0];
                             // 2 cycles later
-                            if (cycles_after == 3) next_tile_nt <= name_table_out;
+                            if (cycles_after == 4) next_tile_nt <= name_table_out;
                         end
                         3: begin
                             if (cycles_after == 1) name_table_re_addr <= 16'h23C0 | (vram_addr & 16'h0C00) | ((vram_addr >> 4) & 8'h38) | ((vram_addr >> 2) & 8'h07);
-                            if (cycles_after == 3) next_tile_at <= (name_table_out >> (quadrant * 2)) & 3'h3;
+                            if (cycles_after == 4) begin
+                                case(quadrant)
+                                    2'b00: next_tile_at <= name_table_out[1:0];
+                                    2'b01: next_tile_at <= name_table_out[3:2];
+                                    2'b10: next_tile_at <= name_table_out[5:4];
+                                    2'b11: next_tile_at <= name_table_out[7:6];
+                                endcase
+                            end
                         end
                         5: begin
-                            if (cycles_after == 1 & !ppu_clk_trig) patt_table_re_addr <= back_pat_addr_switch << 12 + (next_tile_nt << 4) + (vram_fine_y + 0);
+                            if (cycles_after == 1 & !ppu_clk_trig) patt_table_re_addr <= (back_pat_addr_switch << 12) + (next_tile_nt << 4) + (vram_addr.fine_y + 0);
                             // 2 cycles later
-                            if (cycles_after == 3) bg_nt_lsb <= patt_table_out;
+                            if (cycles_after == 4) bg_nt_lsb <= patt_table_out;
                         end
                         7: begin
-                            if (cycles_after == 1 & !ppu_clk_trig)  patt_table_re_addr <= back_pat_addr_switch << 12 + (next_tile_nt << 4) + (vram_fine_y + 8);
+                            if (cycles_after == 1 & !ppu_clk_trig)  patt_table_re_addr <= (back_pat_addr_switch << 12) + (next_tile_nt << 4) + (vram_addr.fine_y + 8);
                             // 2 cycles later
-                            if (cycles_after == 3) bg_nt_msb <= patt_table_out;
+                            if (cycles_after == 4) bg_nt_msb <= patt_table_out;
                         end
                         default: ;
 
                     endcase
                     if(cycles_after == 1) begin
                         if(dot[2:0] == 1) begin
-                            bg_shift_pat_msb <= {bg_shift_pat_msb[14:8], bg_nt_msb};
-                            bg_shift_pat_lsb <= {bg_shift_pat_lsb[14:8], bg_nt_lsb};
+                            bg_shift_pat_msb <= {bg_shift_pat_msb[14:8], bg_nt_msb, 1'b0};
+                            bg_shift_pat_lsb <= {bg_shift_pat_lsb[14:8], bg_nt_lsb, 1'b0};
 
                             bg_shift_at_msb <= {bg_shift_at_msb[0], next_tile_at[1]};
                             bg_shift_at_lsb <= {bg_shift_at_lsb[0], next_tile_at[0]};
@@ -410,17 +427,16 @@ logic patt_table_avail;
                     if(dot == 256) begin
                         if(ppu_mask[4] || ppu_mask[3]) begin
                             if(cycles_after == 1) begin
-                                if(vram_fine_y < 7) begin
-                                    vram_fine_y <= vram_fine_y + 1;
+                                if(vram_addr.fine_y < 7) begin
+                                    vram_addr.fine_y <= vram_addr.fine_y + 1;
                                 end else begin
-                                    vram_fine_y <= 0;
-                                    if(vram_coarse_y == 29 || vram_coarse_y == 31 ) begin
-                                        if(vram_coarse_y == 29) vram_name_table_sel[1] <= ~vram_name_table_sel[1];
-                                        vram_coarse_y <= 0;
+                                    vram_addr.fine_y <= 0;
+                                    if(vram_addr.coarse_y == 29 || vram_addr.coarse_y == 31 ) begin
+                                        if(vram_addr.coarse_y == 29) vram_addr.name_table_sel[1] <= ~vram_addr.name_table_sel[1];
+                                        vram_addr.coarse_y <= 0;
                                     end else begin
-                                        vram_coarse_y <= vram_coarse_y + 1;
+                                        vram_addr.coarse_y <= vram_addr.coarse_y + 1;
                                     end
-                                vram_coarse_x <= vram_coarse_x + 1;
                                 end
                             end
                         end
@@ -428,29 +444,28 @@ logic patt_table_avail;
 
                     if(dot == 257) begin
                         if(ppu_mask[4] || ppu_mask[3]) begin
-                            vram_name_table_sel[0] <= temp_vram_coarse_x[0];
-                            vram_coarse_x <= temp_vram_coarse_x;
+                            vram_addr.name_table_sel[0] <= temp_vram.name_table_sel[0];
+                            vram_addr.coarse_x <= temp_vram.coarse_x;
                         end
                     end
                 end
                 if(1 <= dot && dot <= 256 && 0 <= scanline && scanline < 240) begin
-                    if(ppu_mask[3]) begin
-                        if(cycles_after == 1) palette_ram_inp_addr <= 4 * {pix_pal_msbit, pix_pal_lsbit} + {pix_msbit, pix_lsbit};
-                        // 1 cycle later
-                        if(cycles_after == 2) begin
-                            pixel_x <= (dot - 1);
-                            pixel_y <= scanline;
-                            pixel_valid <= 1;
-                            pixel <= palette_ram_output;
-                        end else begin
-                            pixel_valid <= 0;
-                        end
+                    if(cycles_after == 1) palette_ram_inp_addr <= 4 * {pix_pal_msbit, pix_pal_lsbit} + {pix_msbit, pix_lsbit};
+                    // 1 cycle later
+                    if(cycles_after == 2) begin
+                        pixel_x <= (dot - 1);
+                        pixel_y <= scanline;
+                        pixel_valid <= 1;
+                        pixel <= palette_ram_output;
+                    end else begin
+                        pixel_valid <= 0;
                     end
                 end
                 if(scanline == 261 && 280 <= dot && dot < 305) begin
                     if(ppu_mask[4] || ppu_mask[3]) begin
-                        vram_name_table_sel[1] <= temp_vram_coarse_x[1];
-                        vram_coarse_y <= temp_vram_coarse_y;    
+                        vram_addr.name_table_sel[1] <= temp_vram.name_table_sel[1];
+                        vram_addr.coarse_y <= temp_vram.coarse_y;    
+                        vram_addr.fine_y <= temp_vram.fine_y; // TODO: double check
                     end            
                 end
             end
@@ -461,7 +476,7 @@ logic patt_table_avail;
                     case (cpu_addr[2:0]) 
                         3'h0: begin 
                             ppu_ctrl <= cpu_dout;
-                            temp_vram_name_table_sel <= nametable_sel;
+                            temp_vram.name_table_sel <= nametable_sel;
                         end
                         3'h1: ppu_mask <= cpu_dout;
                         3'h3: oam_addr <= cpu_dout;
@@ -470,34 +485,33 @@ logic patt_table_avail;
                             // for now
                             if(ppu_clk_trig) begin
                                 if(w) begin
-                                    fine_x <= cpu_dout[2:0];
-                                    temp_vram_coarse_x <= cpu_dout[7:3];
+                                    temp_vram.fine_y <= cpu_dout[2:0];
+                                    temp_vram.coarse_y <= cpu_dout[7:3];
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w; // need to change when have actual clocks
                                     // w <= 
                                 end else begin
                                     // pgpu_scroll[7:0] <= cpu_dout;
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
-                                    temp_vram_fine_y <= cpu_dout[2:0];
-                                    temp_vram_coarse_y <= cpu_dout[7:3];
+                                    fine_x <= cpu_dout[2:0];
+                                    temp_vram.coarse_x <= cpu_dout[7:3];
                                 end
                                 w <= ~w;
                             end
-                            w <= (ppu_clk_trig) ? ~w : w;
                         end // handle later
-                        3'h6: begin 
+                        3'h6: begin //ppuaddr
                             if(ppu_clk_trig) begin
                                 if(w) begin
-                                    // temp_vram_addr[7:0] <= cpu_dout;
-                                    temp_vram_coarse_x <= cpu_dout[4:0];
-                                    temp_vram_coarse_y[2:0] <= cpu_dout[7:5];
-                                    vram_addr <= {temp_vram_addr[15:8], cpu_dout};
+                                    // temp_vram[7:0] <= cpu_dout;
+                                    temp_vram.coarse_x <= cpu_dout[4:0];
+                                    temp_vram.coarse_y[2:0] <= cpu_dout[7:5];
+                                    vram_addr <= {temp_vram[15:8], cpu_dout};
 
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w;
                                 end else begin
-                                    // temp_vram_addr[15:8] <= cpu_dout;
-                                    temp_vram_fine_y <= cpu_dout[6:4];
-                                    temp_vram_name_table_sel <= cpu_dout[3:2];
-                                    temp_vram_coarse_y[4:3] <= cpu_dout[1:0];
+                                    // temp_vram[15:8] <= cpu_dout;
+                                    temp_vram.fine_y <= cpu_dout[6:4];
+                                    temp_vram.name_table_sel <= cpu_dout[3:2];
+                                    temp_vram.coarse_y[4:3] <= cpu_dout[1:0];
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
                                 end
                                 w <= ~w;
@@ -541,7 +555,7 @@ logic patt_table_avail;
                             end else if (vram_addr > 16'h1FFF && vram_addr < 16'h3F00) begin
                                 name_table_re_addr <= vram_addr; 
                                 if(cycles_after == 2) ppu_data <= name_table_out;
-                            end else if(vram_addr >= 16'h3F00 && vram_addr <= 16'h3FF) begin
+                            end else if(vram_addr >= 16'h3F00 && vram_addr <= 16'h3FFF) begin
                                 if(ppu_clk_trig) palette_ram_inp_addr <= vram_addr[4:0];
 
                                 // will only take effect one cycle after trigger but eh that's fine
