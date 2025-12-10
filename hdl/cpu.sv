@@ -127,8 +127,6 @@ module cpu (
        INSTRUCTION_RECEIVED, 
        REQUESTED_MEM,
        MEM_VAL_RECEIVED, 
-    //    SIMULATE_INSTRUCTION, 
-    //    MEM_WRITTEN,
        REST, 
        ERROR
     } state_enum; 
