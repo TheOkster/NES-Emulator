@@ -330,7 +330,7 @@ logic patt_table_avail;
             scanline <= 260;
             palette_ram_we <= 0;
             cycles_after <= 0;
-            w <= 1;
+            w <= 0;
             is_clock_even <= 0;
 
             temp_vram.coarse_x <= 0;
@@ -485,21 +485,20 @@ logic patt_table_avail;
                             // for now
                             if(ppu_clk_trig) begin
                                 if(w) begin
-                                    fine_x <= cpu_dout[2:0];
-                                    temp_vram.coarse_x <= cpu_dout[7:3];
+                                    temp_vram.fine_y <= cpu_dout[2:0];
+                                    temp_vram.coarse_y <= cpu_dout[7:3];
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w; // need to change when have actual clocks
                                     // w <= 
                                 end else begin
                                     // pgpu_scroll[7:0] <= cpu_dout;
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
-                                    temp_vram.fine_y <= cpu_dout[2:0];
-                                    temp_vram.coarse_y <= cpu_dout[7:3];
+                                    fine_x <= cpu_dout[2:0];
+                                    temp_vram.coarse_x <= cpu_dout[7:3];
                                 end
                                 w <= ~w;
                             end
-                            w <= (ppu_clk_trig) ? ~w : w;
                         end // handle later
-                        3'h6: begin 
+                        3'h6: begin //ppuaddr
                             if(ppu_clk_trig) begin
                                 if(w) begin
                                     // temp_vram[7:0] <= cpu_dout;
