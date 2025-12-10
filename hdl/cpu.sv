@@ -126,12 +126,18 @@ module cpu (
        REQUESTED_INSTRUCTION, 
        INSTRUCTION_RECEIVED, 
        REQUESTED_MEM,
-       MEM_VAL_RECEIVED, 
+       HANDLING_IRQ,
+       HANDLING_NMI,
+       MEM_VAL_RECEIVED,
        REST, 
        ERROR
     } state_enum; 
 
+    // typedef enum {
+    //     WRITING_LOW,
+    //     WRITING_HIGH,
 
+    // }
    
     // changes based on addressing mode
 
@@ -151,11 +157,7 @@ module cpu (
     logic [7:0] intermediate_mem1;
     logic [7:0] intermediate_mem2;
 
-    logic [5:0] state;
-
-
-
-
+    state_enum state;
 
     logic [7:0] opcode;
     logic [7:0] addressing_mode;
@@ -172,6 +174,8 @@ module cpu (
 
     logic [7:0] temp1;
 
+    logic irq_detected;
+    logic nmi_detected;
 
     always_comb begin
         case(cc)
@@ -584,9 +588,23 @@ module cpu (
     end
 
 
-
+    logic low_pc_recieved;
+    logic high_pc_recieved;
     always_ff @(posedge clk_fast) begin
         
+        if ((state == START) && (!low_pc_recieved) && din_valid) begin
+            pc <= {8'b0, din};
+            low_pc_recieved <= 1;
+            addr <= addr + 1;
+            dout <= 0;
+            rw <= 0;
+        end
+        
+        if ((state == START) && (low_pc_recieved) && (!high_pc_recieved) && din_valid) begin
+            pc <= {pc[7:0], din};
+            high_pc_recieved <= 1;
+        end
+
         if ((state == REQUESTED_INSTRUCTION) && (!instruction_received) && din_valid) begin
             if (instruction_request_count == 0) begin
                 instruction <= din;
@@ -655,7 +673,7 @@ module cpu (
 
     always_ff @(posedge clk_slow) begin
         if (rst) begin
-            addr <= 0;
+            addr <= 16'b1111_1111_1111_1100;
             a <= 8'b0;
             pc <= 16'b1111_1111_1111_1100;
             x <= 8'b0;
@@ -667,8 +685,11 @@ module cpu (
             d <= 0; 
             v <= 0;
             n <= 0;
+            rw <= 0;
             state <= START;
             count <= 0; 
+            low_pc_recieved <= 0;
+            high_pc_recieved <= 0;
             estimated_cycles <= 5; // slower for now
             // error <= 0;
 
@@ -696,7 +717,7 @@ module cpu (
             if (((error1 == 1 || error2 == 1) && state >= INSTRUCTION_RECEIVED) || state == ERROR) begin
                 state <= ERROR;
             end else begin
-                if (state == START) begin
+                if (state == START && low_pc_recieved && high_pc_recieved) begin
                     dout <= 0;
                     addr <= pc;
                     rw <= 0; // read
@@ -930,9 +951,18 @@ module cpu (
                             z <= result == 0;
                             n <= result[7];
                         end
-                        PHA: state <= ERROR;
+                        PHA: begin
+                            addr <= 16'h0100 + s;
+                            dout <= A;
+                            s <= s - 1;
+                        end
                         // STACK
-                        PHP: state <= ERROR;
+                        PHP: begin
+                            addr <= 16'h0100 + s;
+                            dout <= {n, o, 1'b1, b, d, i, z, c};
+                            b <= 0;
+                            s <= s - 1;
+                        end
                         // STACK
                         PLA: state <= ERROR;
                         // STACK
@@ -1013,7 +1043,7 @@ module cpu (
                         UNSUPPORTED_OP: state <= ERROR;
                         // TODO: combine with regular?
                         // JMP_ABS: 
-                        // JSR_ABS:
+                        // JSR_ABS: 
                         default: begin
                             instruction_done <= 1; 
                             state <= ERROR;
