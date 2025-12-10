@@ -113,7 +113,7 @@ def ppu_runner():
     proj_path = Path(__file__).resolve().parent.parent
     sys.path.append(str(proj_path / "sim" / "model"))
     sources = [proj_path / "hdl" / "xilinx_true_dual_port_read_first_2_clock_ram.v",
-               proj_path / "hdl" / "palette_ram.sv", proj_path/ "hdl" /"ppu.sv", proj_path/ "hdl" / "test_only" /"name_table.sv"
+               proj_path / "hdl" / "palette_ram.sv", proj_path/ "hdl" /"ppu.sv", proj_path/ "hdl" / "name_table_testonly.sv"
                ]
     build_test_args = ["-Wall"]
     #values for parameters defined earlier in the code.

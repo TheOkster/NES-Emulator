@@ -74,12 +74,10 @@ module ppu (
     logic [2:0] fine_x;
 
 
-    logic [4:0] temp_vram_coarse_x = 0;
-    logic [4:0] temp_vram_coarse_y = 0;
-    logic [1:0] temp_vram_name_table_sel = 0;
-    logic [2:0] temp_vram_fine_y = 0;
-    logic [15:0] temp_vram_addr;
-    assign temp_vram_addr[14:0] = {temp_vram_fine_y, temp_vram_name_table_sel, temp_vram_coarse_y, temp_vram_coarse_x};
+    // logic [4:0] temp_vram.coarse_x = 0;
+    // logic [4:0] temp_vram.coarse_y = 0;
+    // logic [1:0] temp_vram.name_table_sel = 0;
+    // logic [2:0] temp_vram.fine_y = 0;
 
     // reg vram
 
@@ -90,6 +88,7 @@ module ppu (
         logic [4:0] coarse_x;
     } scroll_reg;
     scroll_reg vram_addr;
+    scroll_reg temp_vram;
     logic [7:0] secondary_oam [31:0];
     // assign vram_addr[14:0] = {vram_fine_y, vram_name_table_sel, vram_coarse_y, vram_coarse_x};
 
@@ -235,6 +234,7 @@ logic patt_table_avail;
     assign patt_table_pix = palette_ram_output;
     assign patt_table_re_addr_deb = 16'h1000*patt_table_ind + 256 * tile_row + 16 * tile_col + rel_row + 8*get_tile_msb;
     assign palette_ram_inp_addr_deb = {patt_table_msb[7-rel_col], patt_table_lsb[7-rel_col]};
+    assign nmi = nmi_enable & (242 <= scanline <= 260) || (scanline == 261 && dot == 0) || (scanline == 241 & dot != 0);
 
     always_ff @(posedge clk) begin
         if(rst) begin   
@@ -249,6 +249,7 @@ logic patt_table_avail;
             fine_x <= 0;
             vram_addr <= 0;
             nametable_sel <= 0;
+            temp_vram <= 0;
             // patt_table_pix <= 0;
         end else begin
             if(patt_table_avail & !first_time) begin
@@ -332,10 +333,10 @@ logic patt_table_avail;
             w <= 1;
             is_clock_even <= 0;
 
-            temp_vram_coarse_x <= 0;
-            temp_vram_coarse_y <= 0;
-            temp_vram_fine_y <= 0;
-            temp_vram_name_table_sel <= 0;
+            temp_vram.coarse_x <= 0;
+            temp_vram.coarse_y <= 0;
+            temp_vram.fine_y <= 0;
+            temp_vram.name_table_sel <= 0;
         end else begin
             // palette_ram_we <= (cpu_rw == CPU_WRITE && cpu_addr[2:0] == 3'h7 && ppu_addr >= 16'h3F00);
             first_time <= 0;
@@ -359,12 +360,12 @@ logic patt_table_avail;
                 
                 if(dot == 1 && scanline == 241) begin
                     vblank_flag <= 1;
-                    if (nmi_enable) nmi <= 1;
+                    // if (nmi_enable) nmi <= 1;
                 end else if (dot == 1 && scanline == 261) begin
                     vblank_flag <= 0;
-                    nmi <= 0;
+                    // nmi <= 0;
                 end else begin
-                    nmi <= 0;
+                    // nmi <= 0;
                 end
 
                 if(((2 <= dot && dot <= 257) || (321 <= dot && dot <= 338) ) && ((0 <= scanline && scanline < 240) || (scanline == 261))) begin
@@ -443,8 +444,8 @@ logic patt_table_avail;
 
                     if(dot == 257) begin
                         if(ppu_mask[4] || ppu_mask[3]) begin
-                            vram_addr.name_table_sel[0] <= temp_vram_name_table_sel[0];
-                            vram_addr.coarse_x <= temp_vram_coarse_x;
+                            vram_addr.name_table_sel[0] <= temp_vram.name_table_sel[0];
+                            vram_addr.coarse_x <= temp_vram.coarse_x;
                         end
                     end
                 end
@@ -462,9 +463,9 @@ logic patt_table_avail;
                 end
                 if(scanline == 261 && 280 <= dot && dot < 305) begin
                     if(ppu_mask[4] || ppu_mask[3]) begin
-                        vram_addr.name_table_sel[1] <= temp_vram_name_table_sel[1];
-                        vram_addr.coarse_y <= temp_vram_coarse_y;    
-                        vram_addr.fine_y <= temp_vram_fine_y; // TODO: double check
+                        vram_addr.name_table_sel[1] <= temp_vram.name_table_sel[1];
+                        vram_addr.coarse_y <= temp_vram.coarse_y;    
+                        vram_addr.fine_y <= temp_vram.fine_y; // TODO: double check
                     end            
                 end
             end
@@ -475,7 +476,7 @@ logic patt_table_avail;
                     case (cpu_addr[2:0]) 
                         3'h0: begin 
                             ppu_ctrl <= cpu_dout;
-                            temp_vram_name_table_sel <= nametable_sel;
+                            temp_vram.name_table_sel <= nametable_sel;
                         end
                         3'h1: ppu_mask <= cpu_dout;
                         3'h3: oam_addr <= cpu_dout;
@@ -485,14 +486,14 @@ logic patt_table_avail;
                             if(ppu_clk_trig) begin
                                 if(w) begin
                                     fine_x <= cpu_dout[2:0];
-                                    temp_vram_coarse_x <= cpu_dout[7:3];
+                                    temp_vram.coarse_x <= cpu_dout[7:3];
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w; // need to change when have actual clocks
                                     // w <= 
                                 end else begin
                                     // pgpu_scroll[7:0] <= cpu_dout;
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
-                                    temp_vram_fine_y <= cpu_dout[2:0];
-                                    temp_vram_coarse_y <= cpu_dout[7:3];
+                                    temp_vram.fine_y <= cpu_dout[2:0];
+                                    temp_vram.coarse_y <= cpu_dout[7:3];
                                 end
                                 w <= ~w;
                             end
@@ -501,17 +502,17 @@ logic patt_table_avail;
                         3'h6: begin 
                             if(ppu_clk_trig) begin
                                 if(w) begin
-                                    // temp_vram_addr[7:0] <= cpu_dout;
-                                    temp_vram_coarse_x <= cpu_dout[4:0];
-                                    temp_vram_coarse_y[2:0] <= cpu_dout[7:5];
-                                    vram_addr <= {temp_vram_addr[15:8], cpu_dout};
+                                    // temp_vram[7:0] <= cpu_dout;
+                                    temp_vram.coarse_x <= cpu_dout[4:0];
+                                    temp_vram.coarse_y[2:0] <= cpu_dout[7:5];
+                                    vram_addr <= {temp_vram[15:8], cpu_dout};
 
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 0 : w;
                                 end else begin
-                                    // temp_vram_addr[15:8] <= cpu_dout;
-                                    temp_vram_fine_y <= cpu_dout[6:4];
-                                    temp_vram_name_table_sel <= cpu_dout[3:2];
-                                    temp_vram_coarse_y[4:3] <= cpu_dout[1:0];
+                                    // temp_vram[15:8] <= cpu_dout;
+                                    temp_vram.fine_y <= cpu_dout[6:4];
+                                    temp_vram.name_table_sel <= cpu_dout[3:2];
+                                    temp_vram.coarse_y[4:3] <= cpu_dout[1:0];
                                     // w <= (cycle == PPU_CYCLES_PER_CLOCK_CYCLE - 1) ? 1 : w;
                                 end
                                 w <= ~w;
