@@ -49,6 +49,7 @@ module cpu (
         INDIRECT,
         TODO,
         IMPLIED0,
+        IMPLIED1,
         UNSUPPORTED_AM
     } addressing_mode_types; 
     // D = Zero page
@@ -126,8 +127,8 @@ module cpu (
        INSTRUCTION_RECEIVED, 
        REQUESTED_MEM,
        MEM_VAL_RECEIVED, 
-       SIMULATE_INSTRUCTION, 
-       MEM_WRITTEN,
+    //    SIMULATE_INSTRUCTION, 
+    //    MEM_WRITTEN,
        REST, 
        ERROR
     } state_enum; 
@@ -215,19 +216,19 @@ module cpu (
                         case (aaa) 
                             3'b000: begin
                                 opcode = PHP;
-                                addressing_mode = TODO;
+                                addressing_mode = IMPLIED1;
                             end
                             3'b001: begin
                                 opcode = PLP;
-                                addressing_mode = TODO;
+                                addressing_mode = IMPLIED1;
                             end
                             3'b010: begin
                                 opcode = PHA;
-                                addressing_mode = TODO;
+                                addressing_mode = IMPLIED1;
                             end
                             3'b011: begin
                                 opcode = PLA;
-                                addressing_mode = TODO;
+                                addressing_mode = IMPLIED1;
                             end
                             3'b100: begin
                                 opcode = DEY;
@@ -522,6 +523,10 @@ module cpu (
                 mem_requests_needed = 0;
 
             end
+            IMPLIED1: begin
+                instruction_requests_needed = 1; 
+                mem_requests_needed = 1;
+            end
             default: error1 = 1;
         endcase
     end
@@ -575,6 +580,7 @@ module cpu (
             ZERO_PAGE: addr_comb = {8'b0, instruction_arg};
             ABSOLUTE: addr_comb = {instruction_arg, instruction_arg2}; 
             IMPLIED0: addr_comb = 0;
+            IMPLIED1: addr_comb = s + 8;
             default: error2 = 1;
         endcase 
     end
