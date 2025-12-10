@@ -564,15 +564,16 @@ logic patt_table_avail;
                         3'h7: begin 
                             if(vram_addr <= 16'h1FFF) begin
                                 if (ppu_clk_trig) patt_table_re_addr <= vram_addr;
-                                if (cycles_after == 4) ppu_data_buffer <= patt_table_out;
+                                if (cycles_after == 3) ppu_data_buffer <= patt_table_out;
                                 if(ppu_clk_trig) cpu_din <= ppu_data_buffer;
                             end else if (vram_addr > 16'h1FFF && vram_addr < 16'h3F00) begin
                                 if (ppu_clk_trig)  name_table_re_addr <= vram_addr; 
-                                if(cycles_after == 4) cpu_din <= name_table_out;
+                                if (cycles_after == 3) ppu_data_buffer <= name_table_out;
+                                if(ppu_clk_trig) cpu_din <= ppu_data_buffer;
                             end else if(vram_addr >= 16'h3F00 && vram_addr <= 16'h3FFF) begin
                                 if(ppu_clk_trig) palette_ram_inp_addr <= vram_addr[4:0];
 
-                                if(cycles_after == 2) begin
+                                if(cycles_after == 1) begin
                                     ppu_data <= palette_ram_output;
                                     ppu_data_buffer <=  palette_ram_output;
                                 end
