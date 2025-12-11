@@ -33,6 +33,8 @@ module top_level(
     logic clk_100_passthrough;
     logic clk_pixel;
     logic          clk_5x;
+    logic [6:0] ss_c; 
+
     logic sys_rst;
     assign sys_rst = btn[0];
 
@@ -111,8 +113,14 @@ assign ppu_clk_trig = ppu_sync0_trig & ~ppu_sync1_trig; // now that i'm thinking
         .irq(),
         .nmi(nmi),
 
+        .cat(ss_c),
+        .an({ss0_an, ss1_an}),
+
         .audio_out()
     );
+
+    assign ss0_c = ss_c;
+    assign ss1_c = ss_c;
 
     logic [7:0] ppu_cpu_din;
     logic ppu_cpu_din_valid;

@@ -13,6 +13,9 @@ module cpu (
         input wire irq,
         input wire nmi,
 
+        output logic[6:0]    cat,
+        output logic[7:0]    an,
+
         output logic [1:0] audio_out // putting in here for future expansion
     );
 
@@ -1094,6 +1097,13 @@ module cpu (
 
     end
 
+    seven_segment_controller my_ssc (
+        .clk(clk_fast),
+        .rst(rst),
+        .val({x, y}),
+        .cat(cat),
+        .an(an) 
+    );
 
 
 endmodule
