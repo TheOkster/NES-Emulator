@@ -1,4 +1,11 @@
 `default_nettype none
+// references:
+// https://llx.com/Neil/a2/opcodes.html - for decoding
+// https://www.nesdev.org/wiki/Instruction_reference - general instruciton references
+// https://www.masswerk.at/6502/assembler.html - assembelr, to see how instructions are decoded/behave
+// https://www.nesdev.org/wiki/CPU_addressing_modes - addressing mode references
+
+
 module cpu (
         input wire clk_slow,
         input wire clk_fast,
