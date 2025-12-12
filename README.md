@@ -6,5 +6,5 @@ This project unfortunately is not working end to end, but the part I was respons
 
 See the generate_ppu_img.py file and convert_dump.py file on how to create that.
 
-This was really fun and while I don't have an FPGA of my own right now, I'd like to continue this and finish it either continueing on an FPGA or doing this in C++ instead, but I'll decide once we get there!
+This was really fun and while I don't have an FPGA of my own right now, I'd like to continue this and finish it either continuing on my own FPGA or doing this in C++ instead, but I'll decide once we get there! Maybe I'll reimplement the CPU so it's entirely my own design.
 
