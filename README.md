@@ -1,4 +1,4 @@
-This is an NES emulator created for the MIT FPGA class 6.205 (Digital System Laboratory).
+This is an NES emulator created for the MIT FPGA class 6.205 (Digital System Laboratory) in Fall of 2025.
 
 This was created in a group of 3.
 
